@@ -6,19 +6,12 @@
  * - Image/multimodal embeddings (voyage-multimodal-3)
  *
  * All embeddings return 1024-dimensional vectors.
+ * All functions require an API key to be passed as a parameter.
  */
 
 // ============================================================================
 // Configuration
 // ============================================================================
-
-const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY;
-
-if (!VOYAGE_API_KEY) {
-  console.warn(
-    '[voyage] VOYAGE_API_KEY not found in environment. API calls will fail.'
-  );
-}
 
 const VOYAGE_BASE_URL = 'https://api.voyageai.com/v1';
 
@@ -124,8 +117,13 @@ function isRetryableError(status: number): boolean {
 
 /**
  * Makes a request to Voyage API with retry logic.
+ *
+ * @param apiKey - Voyage API key
+ * @param endpoint - API endpoint (e.g., '/embeddings')
+ * @param body - Request body
  */
 async function voyageRequest<T>(
+  apiKey: string,
   endpoint: string,
   body: unknown
 ): Promise<T> {
@@ -139,7 +137,7 @@ async function voyageRequest<T>(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${VOYAGE_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(body),
       });
@@ -200,6 +198,7 @@ async function voyageRequest<T>(
 /**
  * Generates a text embedding using Voyage voyage-3-large model.
  *
+ * @param apiKey - Voyage API key
  * @param text - The text to embed
  * @param inputType - Optional: 'query' for search queries, 'document' for content to be searched
  * @returns Promise resolving to a 1024-dimensional embedding vector
@@ -207,20 +206,17 @@ async function voyageRequest<T>(
  *
  * @example
  * ```ts
- * const embedding = await embedTextVoyage("Introduction to arrays in programming");
+ * const embedding = await embedTextVoyage(apiKey, "Introduction to arrays in programming");
  * console.log(embedding.length); // 1024
  * ```
  */
 export async function embedTextVoyage(
+  apiKey: string,
   text: string,
   inputType: 'query' | 'document' = 'document'
 ): Promise<number[]> {
   if (!text || text.trim().length === 0) {
     throw new Error('[embedTextVoyage] Empty text provided');
-  }
-
-  if (!VOYAGE_API_KEY) {
-    throw new Error('[embedTextVoyage] VOYAGE_API_KEY not configured');
   }
 
   try {
@@ -232,6 +228,7 @@ export async function embedTextVoyage(
     };
 
     const response = await voyageRequest<VoyageEmbeddingResponse>(
+      apiKey,
       '/embeddings',
       requestBody
     );
@@ -259,6 +256,7 @@ export async function embedTextVoyage(
 /**
  * Generates an image embedding using Voyage voyage-multimodal-3 model.
  *
+ * @param apiKey - Voyage API key
  * @param base64Jpeg - Base64-encoded JPEG image data (with or without data URI prefix)
  * @returns Promise resolving to a 1024-dimensional embedding vector
  * @throws Error if embedding generation fails
@@ -267,17 +265,13 @@ export async function embedTextVoyage(
  * ```ts
  * const frameBuffer = await extractFrame(videoBuffer, 12.0);
  * const base64 = frameBuffer.toString('base64');
- * const embedding = await embedImageVoyage(base64);
+ * const embedding = await embedImageVoyage(apiKey, base64);
  * console.log(embedding.length); // 1024
  * ```
  */
-export async function embedImageVoyage(base64Jpeg: string): Promise<number[]> {
+export async function embedImageVoyage(apiKey: string, base64Jpeg: string): Promise<number[]> {
   if (!base64Jpeg || base64Jpeg.length === 0) {
     throw new Error('[embedImageVoyage] Empty base64 data provided');
-  }
-
-  if (!VOYAGE_API_KEY) {
-    throw new Error('[embedImageVoyage] VOYAGE_API_KEY not configured');
   }
 
   // Voyage multimodal API requires the full data URI prefix
@@ -305,6 +299,7 @@ export async function embedImageVoyage(base64Jpeg: string): Promise<number[]> {
     };
 
     const response = await voyageRequest<VoyageEmbeddingResponse>(
+      apiKey,
       '/multimodalembeddings',
       requestBody
     );
@@ -333,6 +328,7 @@ export async function embedImageVoyage(base64Jpeg: string): Promise<number[]> {
  * Batch-embeds multiple texts using Voyage voyage-3-large model.
  * More efficient than calling embedTextVoyage multiple times.
  *
+ * @param apiKey - Voyage API key
  * @param texts - Array of texts to embed (max 128 per batch)
  * @param inputType - Optional: 'query' for search queries, 'document' for content
  * @returns Promise resolving to array of 1024-dimensional vectors (same order as input)
@@ -340,22 +336,19 @@ export async function embedImageVoyage(base64Jpeg: string): Promise<number[]> {
  *
  * @example
  * ```ts
- * const embeddings = await embedTextBatchVoyage([
+ * const embeddings = await embedTextBatchVoyage(apiKey, [
  *   "First segment transcript...",
  *   "Second segment transcript...",
  * ]);
  * ```
  */
 export async function embedTextBatchVoyage(
+  apiKey: string,
   texts: string[],
   inputType: 'query' | 'document' = 'document'
 ): Promise<number[][]> {
   if (!texts || texts.length === 0) {
     throw new Error('[embedTextBatchVoyage] Empty texts array provided');
-  }
-
-  if (!VOYAGE_API_KEY) {
-    throw new Error('[embedTextBatchVoyage] VOYAGE_API_KEY not configured');
   }
 
   // Voyage supports up to 128 texts per batch
@@ -365,7 +358,7 @@ export async function embedTextBatchVoyage(
     const results: number[][] = [];
     for (let i = 0; i < texts.length; i += MAX_BATCH_SIZE) {
       const chunk = texts.slice(i, i + MAX_BATCH_SIZE);
-      const chunkEmbeddings = await embedTextBatchVoyage(chunk, inputType);
+      const chunkEmbeddings = await embedTextBatchVoyage(apiKey, chunk, inputType);
       results.push(...chunkEmbeddings);
     }
     return results;
@@ -380,6 +373,7 @@ export async function embedTextBatchVoyage(
     };
 
     const response = await voyageRequest<VoyageEmbeddingResponse>(
+      apiKey,
       '/embeddings',
       requestBody
     );
@@ -413,12 +407,14 @@ export async function embedTextBatchVoyage(
  * Batch-embeds multiple images using Voyage voyage-multimodal-3 model.
  * Processes images sequentially due to API constraints.
  *
+ * @param apiKey - Voyage API key
  * @param base64Images - Array of base64-encoded JPEG images
  * @param onProgress - Optional callback for progress updates
  * @returns Promise resolving to array of 1024-dimensional vectors (same order as input)
  * @throws Error if embedding generation fails
  */
 export async function embedImageBatchVoyage(
+  apiKey: string,
   base64Images: string[],
   onProgress?: (completed: number, total: number) => void
 ): Promise<number[][]> {
@@ -429,7 +425,7 @@ export async function embedImageBatchVoyage(
   const embeddings: number[][] = [];
 
   for (let i = 0; i < base64Images.length; i++) {
-    const embedding = await embedImageVoyage(base64Images[i]);
+    const embedding = await embedImageVoyage(apiKey, base64Images[i]);
     embeddings.push(embedding);
 
     if (onProgress) {

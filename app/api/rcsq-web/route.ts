@@ -1,27 +1,10 @@
 /**
- * RCSQ Video Processing API Route
+ * RCSQ Web API Route
  *
- * POST /api/rcsq
+ * POST /api/rcsq-web
  *
- * Accepts a video file via multipart/form-data and returns
- * a JSON result with transcription, topics, frames, and faces.
- *
- * Form Fields:
- * - file: Video file (required, max 10MB)
- * - enableFaceDetection: 'true' or 'false' (optional, default: true)
- *
- * Credentials (provide ONE of the following):
- * Option 1: Direct credentials in form data
- * - openaiApiKey: OpenAI API key
- * - voyageApiKey: Voyage AI API key
- * - awsRegion: AWS region (optional, default: us-east-1)
- * - awsAccessKeyId: AWS access key ID (required if face detection enabled)
- * - awsSecretAccessKey: AWS secret access key (required if face detection enabled)
- *
- * Option 2: Use server-side credentials
- * - secret_token: Server token to use credentials from .env
- *
- * Face detection uses AWS Rekognition API.
+ * A thin wrapper around the main /api/rcsq endpoint for the web UI.
+ * Forwards the request and returns the same response.
  */
 
 export const runtime = 'nodejs';
@@ -141,10 +124,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const buffer = Buffer.from(arrayBuffer);
 
     console.log(
-      `[api/rcsq] Processing: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB, ${mimeType})`
+      `[api/rcsq-web] Processing: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB, ${mimeType})`
     );
-    console.log(`[api/rcsq] Face detection: ${enableFaceDetection ? 'enabled (AWS Rekognition)' : 'disabled'}`);
-    console.log(`[api/rcsq] Credentials: ${secretToken ? 'via secret_token' : 'from request'}`);
 
     // =========================================================================
     // Run pipeline
@@ -158,11 +139,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         enableFaceDetection,
       },
       {
-        frameIntervalSec: 5,  // Extract frame every 5 seconds
-        maxFrames: 1000,      // Max 1000 frames
-        onProgress: (stage, percent) => {
-          console.log(`[api/rcsq] ${stage}: ${percent}%`);
-        },
+        frameIntervalSec: 5,
+        maxFrames: 1000,
       }
     );
 
@@ -170,7 +148,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Return success response
     // =========================================================================
     const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`[api/rcsq] Complete in ${processingTime}s`);
+    console.log(`[api/rcsq-web] Complete in ${processingTime}s`);
 
     return NextResponse.json(result, {
       status: 200,
@@ -179,39 +157,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    // =========================================================================
-    // Handle errors
-    // =========================================================================
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[api/rcsq] Pipeline error:', errorMessage);
-
-    if (error instanceof Error && error.stack) {
-      console.error('[api/rcsq] Stack trace:', error.stack);
-    }
+    console.error('[api/rcsq-web] Pipeline error:', errorMessage);
 
     return errorResponse(
-      'Video processing failed. Please try again or contact support.',
+      `Processing failed: ${errorMessage}`,
       500
     );
   }
 }
 
-// ============================================================================
-// Method Not Allowed Handler
-// ============================================================================
-
-export async function GET(): Promise<NextResponse> {
-  return errorResponse('Method not allowed. Use POST.', 405);
-}
-
-export async function PUT(): Promise<NextResponse> {
-  return errorResponse('Method not allowed. Use POST.', 405);
-}
-
-export async function DELETE(): Promise<NextResponse> {
-  return errorResponse('Method not allowed. Use POST.', 405);
-}
-
-export async function PATCH(): Promise<NextResponse> {
-  return errorResponse('Method not allowed. Use POST.', 405);
-}

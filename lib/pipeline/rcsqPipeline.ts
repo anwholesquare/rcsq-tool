@@ -52,7 +52,10 @@ import {
   deduplicateFaces,
   ProcessedFace,
   FACE_DETECTION_MODEL,
+  AwsCredentials,
 } from '@/lib/media/faceDetection';
+
+import { ApiCredentials } from '@/lib/credentials';
 
 // ============================================================================
 // Types
@@ -70,6 +73,8 @@ export interface RcsqPipelineInput {
   mimeType: string;
   /** Whether to enable face detection (default: true) */
   enableFaceDetection?: boolean;
+  /** API credentials (OpenAI, Voyage, AWS) */
+  credentials: ApiCredentials;
 }
 
 /**
@@ -256,6 +261,7 @@ function formatFaceId(index: number): string {
  * Processes transcript segments into the output format with embeddings.
  */
 async function processSegments(
+  voyageApiKey: string,
   whisperSegments: WhisperSegment[],
   rcsqVideoId: string,
   tracker: TokenTracker,
@@ -273,7 +279,7 @@ async function processSegments(
   tracker['voyage-3-large'].inputTokens += estimateTokens(texts.join(' '));
 
   // Batch embed all texts at once (more efficient)
-  const embeddings = await embedTextBatchVoyage(texts);
+  const embeddings = await embedTextBatchVoyage(voyageApiKey, texts);
 
   // Build segment objects
   const segments: Segment[] = whisperSegments.map((seg, index) => {
@@ -306,6 +312,7 @@ async function processSegments(
  * Processes topics from segments.
  */
 async function processTopics(
+  openaiApiKey: string,
   segments: Segment[],
   rcsqVideoId: string,
   tracker: TokenTracker
@@ -325,7 +332,7 @@ async function processTopics(
   tracker['gpt-4.1-nano'].inputTokens += estimateTokens(inputText) + 200; // +200 for system prompt
 
   // Extract topics using GPT-4.1-nano
-  const rawTopics = await extractTopicsForVideo(segmentData);
+  const rawTopics = await extractTopicsForVideo(openaiApiKey, segmentData);
 
   // Track output tokens
   const outputText = JSON.stringify(rawTopics);
@@ -356,6 +363,8 @@ const FRAME_CONCURRENCY = 6;
  * Processes a single frame: caption and embed.
  */
 async function processSingleFrame(
+  openaiApiKey: string,
+  voyageApiKey: string,
   extracted: { timestampSec: number; jpegBase64: string },
   index: number,
   rcsqVideoId: string,
@@ -365,7 +374,7 @@ async function processSingleFrame(
   tracker['gpt-5-mini'].inputTokens += estimateImageTokens(extracted.jpegBase64.length) + 50;
 
   // Caption the frame using GPT-5-mini vision
-  const caption = await captionFrameBase64(extracted.jpegBase64);
+  const caption = await captionFrameBase64(openaiApiKey, extracted.jpegBase64);
 
   // Track output tokens
   tracker['gpt-5-mini'].outputTokens += estimateTokens(caption);
@@ -374,7 +383,7 @@ async function processSingleFrame(
   tracker['voyage-multimodal-3'].inputTokens += estimateImageTokens(extracted.jpegBase64.length);
 
   // Embed the frame using Voyage multimodal
-  const embedding = await embedImageVoyage(extracted.jpegBase64);
+  const embedding = await embedImageVoyage(voyageApiKey, extracted.jpegBase64);
 
   return {
     frame_id: formatFrameId(index),
@@ -401,6 +410,8 @@ async function processSingleFrame(
  * Maintains up to FRAME_CONCURRENCY (6) concurrent operations.
  */
 async function processFrames(
+  openaiApiKey: string,
+  voyageApiKey: string,
   extractedFrames: Array<{ timestampSec: number; jpegBase64: string }>,
   rcsqVideoId: string,
   tracker: TokenTracker,
@@ -423,6 +434,8 @@ async function processFrames(
 
       try {
         const frame = await processSingleFrame(
+          openaiApiKey,
+          voyageApiKey,
           extracted,
           currentIndex,
           rcsqVideoId,
@@ -456,6 +469,8 @@ async function processFrames(
  * Detects and processes faces using AWS Rekognition.
  */
 async function processFaces(
+  awsCredentials: AwsCredentials,
+  voyageApiKey: string,
   extractedFrames: Array<{ timestampSec: number; jpegBase64: string }>,
   rcsqVideoId: string,
   tracker: TokenTracker,
@@ -467,6 +482,7 @@ async function processFaces(
 
   // Detect faces in all frames using AWS Rekognition
   const detectedFaces = await detectAndProcessFaces(
+    awsCredentials,
     extractedFrames,
     (completed, total) => {
       // Report detection progress (first half)
@@ -494,7 +510,7 @@ async function processFaces(
     tracker['voyage-multimodal-3'].inputTokens += estimateImageTokens(face.imageBase64ForEmbedding.length);
 
     // Embed the face image (using resized version, max 448px height)
-    const embedding = await embedImageVoyage(face.imageBase64ForEmbedding);
+    const embedding = await embedImageVoyage(voyageApiKey, face.imageBase64ForEmbedding);
 
     faces.push({
       face_id: formatFaceId(i),
@@ -533,7 +549,7 @@ async function processFaces(
 /**
  * Runs the complete RCSQ video processing pipeline.
  *
- * @param input - Video buffer, filename, mimeType, and optional client-detected faces
+ * @param input - Video buffer, filename, mimeType, credentials, and optional face detection flag
  * @param options - Optional configuration (frameIntervalSec, maxFrames, progress callback)
  * @returns Promise resolving to complete RcsqResult
  * @throws Error if any processing step fails
@@ -544,6 +560,13 @@ async function processFaces(
  *   buffer: videoBuffer,
  *   filename: 'lecture.mp4',
  *   mimeType: 'video/mp4',
+ *   credentials: {
+ *     openaiApiKey: 'sk-...',
+ *     voyageApiKey: 'pa-...',
+ *     awsRegion: 'us-east-1',
+ *     awsAccessKeyId: 'AKIA...',
+ *     awsSecretAccessKey: '...',
+ *   },
  *   enableFaceDetection: true, // Uses AWS Rekognition
  * }, {
  *   frameIntervalSec: 5,  // Extract frame every 5 seconds
@@ -556,7 +579,15 @@ export async function runRcsqPipeline(
   options: RcsqPipelineOptions = {}
 ): Promise<RcsqResult> {
   const startTime = Date.now();
-  const { buffer, filename, mimeType, enableFaceDetection = true } = input;
+  const { buffer, filename, mimeType, credentials, enableFaceDetection = true } = input;
+
+  // Extract credentials
+  const { openaiApiKey, voyageApiKey, awsRegion, awsAccessKeyId, awsSecretAccessKey } = credentials;
+  const awsCredentials: AwsCredentials = {
+    region: awsRegion,
+    accessKeyId: awsAccessKeyId,
+    secretAccessKey: awsSecretAccessKey,
+  };
   const {
     frameIntervalSec = DEFAULT_FRAME_INTERVAL_SEC,
     maxFrames = DEFAULT_MAX_FRAMES,
@@ -603,7 +634,7 @@ export async function runRcsqPipeline(
   reportProgress('Extracting audio', 100);
   reportProgress('Transcribing', 0);
 
-  const transcription = await transcribeAudioWithSegments(audioBuffer, 'audio/wav');
+  const transcription = await transcribeAudioWithSegments(openaiApiKey, audioBuffer, 'audio/wav');
 
   // Track Whisper tokens (estimate based on audio duration in seconds)
   // Whisper uses ~25 tokens per second of audio
@@ -618,6 +649,7 @@ export async function runRcsqPipeline(
   reportProgress('Processing segments', 0);
 
   const segments = await processSegments(
+    voyageApiKey,
     transcription.segments,
     rcsqVideoId,
     tracker,
@@ -633,7 +665,7 @@ export async function runRcsqPipeline(
   // =========================================================================
   reportProgress('Extracting topics', 0);
 
-  const topics = await processTopics(segments, rcsqVideoId, tracker);
+  const topics = await processTopics(openaiApiKey, segments, rcsqVideoId, tracker);
 
   reportProgress('Extracting topics', 100);
 
@@ -651,6 +683,8 @@ export async function runRcsqPipeline(
   reportProgress('Processing frames', 0);
 
   const frames = await processFrames(
+    openaiApiKey,
+    voyageApiKey,
     extractedFrames,
     rcsqVideoId,
     tracker,
@@ -670,6 +704,8 @@ export async function runRcsqPipeline(
     reportProgress('Detecting faces', 0);
 
     faces = await processFaces(
+      awsCredentials,
+      voyageApiKey,
       extractedFrames,
       rcsqVideoId,
       tracker,

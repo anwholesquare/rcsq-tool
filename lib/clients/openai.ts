@@ -1,35 +1,29 @@
 /**
  * OpenAI Client Module
  *
- * Provides a configured OpenAI SDK client and helper functions for:
+ * Provides helper functions for:
  * - Audio transcription (Whisper)
  * - Segment summarisation (GPT-4o-mini)
  * - Topic extraction (GPT-4.1-nano)
  * - Frame captioning (GPT-5-mini)
+ *
+ * All functions require an API key to be passed as a parameter.
  */
 
 import OpenAI from 'openai';
 import { toFile } from 'openai/uploads';
 
 // ============================================================================
-// Client Configuration
+// Client Factory
 // ============================================================================
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-if (!OPENAI_API_KEY) {
-  console.warn(
-    '[openai] OPENAI_API_KEY not found in environment. API calls will fail.'
-  );
-}
-
 /**
- * Configured OpenAI client instance.
- * Uses the OPENAI_API_KEY environment variable.
+ * Creates an OpenAI client with the provided API key.
+ * @param apiKey - OpenAI API key
  */
-export const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
+function createClient(apiKey: string): OpenAI {
+  return new OpenAI({ apiKey });
+}
 
 // ============================================================================
 // Model Constants
@@ -94,6 +88,7 @@ Guidelines:
 /**
  * Transcribes audio using OpenAI's Whisper model.
  *
+ * @param apiKey - OpenAI API key
  * @param buffer - Audio data as a Buffer
  * @param mimeType - MIME type of the audio (e.g., 'audio/mp3', 'audio/wav')
  * @returns Promise resolving to the transcribed text
@@ -102,10 +97,11 @@ Guidelines:
  * @example
  * ```ts
  * const audioBuffer = await extractAudioFromVideo(videoBuffer);
- * const transcript = await transcribeAudioWhisper(audioBuffer, 'audio/mp3');
+ * const transcript = await transcribeAudioWhisper(apiKey, audioBuffer, 'audio/mp3');
  * ```
  */
 export async function transcribeAudioWhisper(
+  apiKey: string,
   buffer: Buffer,
   mimeType: string
 ): Promise<string> {
@@ -131,10 +127,11 @@ export async function transcribeAudioWhisper(
   const filename = `audio.${extension}`;
 
   try {
+    const client = createClient(apiKey);
     // Convert Buffer to File object for OpenAI SDK
     const file = await toFile(buffer, filename, { type: mimeType });
 
-    const response = await openai.audio.transcriptions.create({
+    const response = await client.audio.transcriptions.create({
       file,
       model: MODELS.WHISPER,
       response_format: 'verbose_json',
@@ -152,12 +149,14 @@ export async function transcribeAudioWhisper(
 /**
  * Transcribes audio with detailed segment information including timestamps.
  *
+ * @param apiKey - OpenAI API key
  * @param buffer - Audio data as a Buffer
  * @param mimeType - MIME type of the audio
  * @returns Promise resolving to transcription with segments
  * @throws Error if transcription fails
  */
 export async function transcribeAudioWithSegments(
+  apiKey: string,
   buffer: Buffer,
   mimeType: string
 ): Promise<{
@@ -193,9 +192,10 @@ export async function transcribeAudioWithSegments(
   const filename = `audio.${extension}`;
 
   try {
+    const client = createClient(apiKey);
     const file = await toFile(buffer, filename, { type: mimeType });
 
-    const response = await openai.audio.transcriptions.create({
+    const response = await client.audio.transcriptions.create({
       file,
       model: MODELS.WHISPER,
       response_format: 'verbose_json',
@@ -237,23 +237,25 @@ export async function transcribeAudioWithSegments(
 /**
  * Summarises a transcript segment using GPT-4o-mini.
  *
+ * @param apiKey - OpenAI API key
  * @param text - The transcript text to summarise
  * @returns Promise resolving to a concise summary
  * @throws Error if summarisation fails
  *
  * @example
  * ```ts
- * const summary = await summariseSegment("In this video we'll learn about arrays...");
+ * const summary = await summariseSegment(apiKey, "In this video we'll learn about arrays...");
  * // Returns: "Introduction to arrays and their purpose in programming."
  * ```
  */
-export async function summariseSegment(text: string): Promise<string> {
+export async function summariseSegment(apiKey: string, text: string): Promise<string> {
   if (!text || text.trim().length === 0) {
     throw new Error('[summariseSegment] Empty text provided');
   }
 
   try {
-    const response = await openai.chat.completions.create({
+    const client = createClient(apiKey);
+    const response = await client.chat.completions.create({
       model: MODELS.SUMMARISATION,
       messages: [
         { role: 'system', content: SUMMARISATION_SYSTEM_PROMPT },
@@ -281,19 +283,21 @@ export async function summariseSegment(text: string): Promise<string> {
 /**
  * Extracts topics from video transcript segments using GPT-4.1-nano.
  *
+ * @param apiKey - OpenAI API key
  * @param segments - Array of segment objects with id and text
  * @returns Promise resolving to array of extracted topics
  * @throws Error if topic extraction fails
  *
  * @example
  * ```ts
- * const topics = await extractTopicsForVideo([
+ * const topics = await extractTopicsForVideo(apiKey, [
  *   { id: 'seg_0001', text: 'Today we learn about arrays...' },
  *   { id: 'seg_0002', text: 'Arrays store multiple values...' },
  * ]);
  * ```
  */
 export async function extractTopicsForVideo(
+  apiKey: string,
   segments: Array<{ id: string; text: string }>
 ): Promise<
   Array<{
@@ -313,7 +317,8 @@ export async function extractTopicsForVideo(
     .join('\n\n');
 
   try {
-    const response = await openai.chat.completions.create({
+    const client = createClient(apiKey);
+    const response = await client.chat.completions.create({
       model: MODELS.TOPIC_EXTRACTION,
       messages: [
         { role: 'system', content: TOPIC_EXTRACTION_SYSTEM_PROMPT },
@@ -375,17 +380,18 @@ export async function extractTopicsForVideo(
 /**
  * Generates a caption for a video frame using GPT-5-mini with vision.
  *
+ * @param apiKey - OpenAI API key
  * @param base64Jpeg - Base64-encoded JPEG image data (without data URI prefix)
  * @returns Promise resolving to a descriptive caption
  * @throws Error if caption generation fails
  *
  * @example
  * ```ts
- * const caption = await captionFrameBase64(frameBase64);
+ * const caption = await captionFrameBase64(apiKey, frameBase64);
  * // Returns: "Code editor showing an array declaration with syntax highlighting."
  * ```
  */
-export async function captionFrameBase64(base64Jpeg: string): Promise<string> {
+export async function captionFrameBase64(apiKey: string, base64Jpeg: string): Promise<string> {
   if (!base64Jpeg || base64Jpeg.length === 0) {
     throw new Error('[captionFrameBase64] Empty base64 data provided');
   }
@@ -394,7 +400,8 @@ export async function captionFrameBase64(base64Jpeg: string): Promise<string> {
   const cleanBase64 = base64Jpeg.replace(/^data:image\/\w+;base64,/, '');
 
   try {
-    const response = await openai.chat.completions.create({
+    const client = createClient(apiKey);
+    const response = await client.chat.completions.create({
       model: MODELS.CAPTIONING,
       messages: [
         { role: 'system', content: CAPTIONING_SYSTEM_PROMPT },
@@ -435,18 +442,20 @@ export async function captionFrameBase64(base64Jpeg: string): Promise<string> {
  * Batch-processes multiple frames for captioning.
  * Processes sequentially to avoid rate limits.
  *
+ * @param apiKey - OpenAI API key
  * @param frames - Array of base64-encoded JPEG images
  * @param onProgress - Optional callback for progress updates
  * @returns Promise resolving to array of captions (same order as input)
  */
 export async function captionFramesBatch(
+  apiKey: string,
   frames: string[],
   onProgress?: (completed: number, total: number) => void
 ): Promise<string[]> {
   const captions: string[] = [];
 
   for (let i = 0; i < frames.length; i++) {
-    const caption = await captionFrameBase64(frames[i]);
+    const caption = await captionFrameBase64(apiKey, frames[i]);
     captions.push(caption);
 
     if (onProgress) {
@@ -461,18 +470,20 @@ export async function captionFramesBatch(
  * Batch-processes multiple segments for summarisation.
  * Processes sequentially to avoid rate limits.
  *
+ * @param apiKey - OpenAI API key
  * @param texts - Array of transcript texts to summarise
  * @param onProgress - Optional callback for progress updates
  * @returns Promise resolving to array of summaries (same order as input)
  */
 export async function summariseSegmentsBatch(
+  apiKey: string,
   texts: string[],
   onProgress?: (completed: number, total: number) => void
 ): Promise<string[]> {
   const summaries: string[] = [];
 
   for (let i = 0; i < texts.length; i++) {
-    const summary = await summariseSegment(texts[i]);
+    const summary = await summariseSegment(apiKey, texts[i]);
     summaries.push(summary);
 
     if (onProgress) {

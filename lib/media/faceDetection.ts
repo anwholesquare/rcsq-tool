@@ -3,6 +3,8 @@
  *
  * Uses AWS Rekognition API to detect faces in video frames.
  * Processes extracted frames, detects faces, crops them, and prepares for embedding.
+ *
+ * All functions require AWS credentials to be passed as parameters.
  */
 
 import {
@@ -13,18 +15,33 @@ import {
 import sharp from 'sharp';
 
 // ============================================================================
-// AWS Configuration
+// Types
 // ============================================================================
 
-const rekognitionClient = new RekognitionClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: process.env.AWS_ACCESS_KEY_ID
-    ? {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-      }
-    : undefined, // Use default credential chain if not explicitly set
-});
+/**
+ * AWS credentials for Rekognition API.
+ */
+export interface AwsCredentials {
+  /** AWS region (default: us-east-1) */
+  region: string;
+  /** AWS access key ID */
+  accessKeyId: string;
+  /** AWS secret access key */
+  secretAccessKey: string;
+}
+
+/**
+ * Creates a Rekognition client with the provided credentials.
+ */
+function createRekognitionClient(credentials: AwsCredentials): RekognitionClient {
+  return new RekognitionClient({
+    region: credentials.region,
+    credentials: {
+      accessKeyId: credentials.accessKeyId,
+      secretAccessKey: credentials.secretAccessKey,
+    },
+  });
+}
 
 // ============================================================================
 // Types
@@ -103,16 +120,18 @@ const REKOGNITION_CONCURRENCY = 5;
 /**
  * Detects faces in a single frame using AWS Rekognition.
  *
+ * @param awsCredentials - AWS credentials for Rekognition
  * @param base64Jpeg - Base64-encoded JPEG image
  * @returns Promise resolving to array of detected faces
  *
  * @example
  * ```ts
- * const faces = await detectFacesInFrame(frame.jpegBase64);
+ * const faces = await detectFacesInFrame(awsCredentials, frame.jpegBase64);
  * console.log(`Found ${faces.length} faces`);
  * ```
  */
 export async function detectFacesInFrame(
+  awsCredentials: AwsCredentials,
   base64Jpeg: string
 ): Promise<DetectedFace[]> {
   if (!base64Jpeg || base64Jpeg.length === 0) {
@@ -130,6 +149,7 @@ export async function detectFacesInFrame(
   }
 
   try {
+    const client = createRekognitionClient(awsCredentials);
     const command = new DetectFacesCommand({
       Image: {
         Bytes: imageBuffer,
@@ -137,7 +157,7 @@ export async function detectFacesInFrame(
       Attributes: [Attribute.DEFAULT],
     });
 
-    const response = await rekognitionClient.send(command);
+    const response = await client.send(command);
 
     if (!response.FaceDetails || response.FaceDetails.length === 0) {
       return [];
@@ -253,11 +273,13 @@ async function cropFaceFromImage(
 /**
  * Processes a single frame to detect and crop faces.
  *
+ * @param awsCredentials - AWS credentials for Rekognition
  * @param frame - Extracted frame with timestamp and base64 data
  * @param frameIndex - Index of the frame (for frame_id)
  * @returns Array of processed faces
  */
 async function processFrameForFaces(
+  awsCredentials: AwsCredentials,
   frame: { timestampSec: number; jpegBase64: string },
   frameIndex: number
 ): Promise<ProcessedFace[]> {
@@ -272,7 +294,7 @@ async function processFrameForFaces(
   }
 
   // Detect faces
-  const detectedFaces = await detectFacesInFrame(frame.jpegBase64);
+  const detectedFaces = await detectFacesInFrame(awsCredentials, frame.jpegBase64);
 
   if (detectedFaces.length === 0) {
     return [];
@@ -314,17 +336,19 @@ async function processFrameForFaces(
  * Detects and processes faces across all extracted frames.
  * Uses concurrent processing for better performance.
  *
+ * @param awsCredentials - AWS credentials for Rekognition
  * @param frames - Array of extracted frames
  * @param onProgress - Optional progress callback
  * @returns Array of all processed faces
  *
  * @example
  * ```ts
- * const faces = await detectAndProcessFaces(extractedFrames);
+ * const faces = await detectAndProcessFaces(awsCredentials, extractedFrames);
  * console.log(`Found ${faces.length} total faces`);
  * ```
  */
 export async function detectAndProcessFaces(
+  awsCredentials: AwsCredentials,
   frames: Array<{ timestampSec: number; jpegBase64: string }>,
   onProgress?: (completed: number, total: number) => void
 ): Promise<ProcessedFace[]> {
@@ -344,7 +368,7 @@ export async function detectAndProcessFaces(
       const frame = frames[currentIndex];
 
       try {
-        const faces = await processFrameForFaces(frame, currentIndex);
+        const faces = await processFrameForFaces(awsCredentials, frame, currentIndex);
         
         // Thread-safe push (JS is single-threaded, so this is safe)
         allFaces.push(...faces);
@@ -465,11 +489,3 @@ export function filterValidFaces(faces: unknown[]): ClientDetectedFace[] {
   });
 }
 
-export async function processAllFaces(
-  frames: Array<{ timestampSec: number; jpegBase64: string }>,
-  clientFaces: ClientDetectedFace[]
-): Promise<ProcessedFace[]> {
-  // Legacy function - now uses server-side detection
-  // If client faces are provided, we could use them, but prefer server detection
-  return detectAndProcessFaces(frames);
-}

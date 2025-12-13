@@ -1,23 +1,35 @@
 /**
  * Health Check API Route
  *
- * GET /api/health
+ * POST /api/health
  *
  * Checks connectivity and configuration for all external services:
  * - OpenAI (Whisper, GPT models)
  * - Voyage AI (Embeddings)
  * - AWS Rekognition (Face detection)
  * - FFmpeg/FFprobe (Media processing)
+ *
+ * Credentials (provide ONE of the following):
+ * Option 1: Direct credentials in JSON body
+ * - openaiApiKey: OpenAI API key
+ * - voyageApiKey: Voyage AI API key
+ * - awsRegion: AWS region (optional, default: us-east-1)
+ * - awsAccessKeyId: AWS access key ID
+ * - awsSecretAccessKey: AWS secret access key
+ *
+ * Option 2: Use server-side credentials
+ * - secret_token: Server token to use credentials from .env
  */
 
 export const runtime = 'nodejs';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import OpenAI from 'openai';
 import { RekognitionClient, DescribeProjectsCommand } from '@aws-sdk/client-rekognition';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import ffprobeInstaller from '@ffprobe-installer/ffprobe';
+import { isValidSecretToken } from '@/lib/credentials';
 
 // ============================================================================
 // Types
@@ -46,6 +58,31 @@ interface HealthResponse {
   };
 }
 
+interface CredentialsInput {
+  openaiApiKey?: string;
+  voyageApiKey?: string;
+  awsRegion?: string;
+  awsAccessKeyId?: string;
+  awsSecretAccessKey?: string;
+  secret_token?: string;
+}
+
+// ============================================================================
+// Credential Resolution
+// ============================================================================
+
+function resolveHealthCredentials(input: CredentialsInput) {
+  const useEnv = isValidSecretToken(input.secret_token);
+
+  return {
+    openaiApiKey: input.openaiApiKey || (useEnv ? process.env.OPENAI_API_KEY : undefined),
+    voyageApiKey: input.voyageApiKey || (useEnv ? process.env.VOYAGE_API_KEY : undefined),
+    awsRegion: input.awsRegion || (useEnv ? process.env.AWS_REGION : undefined) || 'us-east-1',
+    awsAccessKeyId: input.awsAccessKeyId || (useEnv ? process.env.AWS_ACCESS_KEY_ID : undefined),
+    awsSecretAccessKey: input.awsSecretAccessKey || (useEnv ? process.env.AWS_SECRET_ACCESS_KEY : undefined),
+  };
+}
+
 // ============================================================================
 // Health Check Functions
 // ============================================================================
@@ -53,13 +90,11 @@ interface HealthResponse {
 /**
  * Check OpenAI API connection by listing models.
  */
-async function checkOpenAI(): Promise<ServiceStatus> {
-  const apiKey = process.env.OPENAI_API_KEY;
-
+async function checkOpenAI(apiKey?: string): Promise<ServiceStatus> {
   if (!apiKey) {
     return {
       status: 'not_configured',
-      message: 'OPENAI_API_KEY not set',
+      message: 'OpenAI API key not provided',
     };
   }
 
@@ -95,13 +130,11 @@ async function checkOpenAI(): Promise<ServiceStatus> {
 /**
  * Check Voyage AI API connection.
  */
-async function checkVoyage(): Promise<ServiceStatus> {
-  const apiKey = process.env.VOYAGE_API_KEY;
-
+async function checkVoyage(apiKey?: string): Promise<ServiceStatus> {
   if (!apiKey) {
     return {
       status: 'not_configured',
-      message: 'VOYAGE_API_KEY not set',
+      message: 'Voyage API key not provided',
     };
   }
 
@@ -152,15 +185,15 @@ async function checkVoyage(): Promise<ServiceStatus> {
 /**
  * Check AWS Rekognition API connection.
  */
-async function checkAWSRekognition(): Promise<ServiceStatus> {
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-  const region = process.env.AWS_REGION || 'us-east-1';
-
+async function checkAWSRekognition(
+  accessKeyId?: string,
+  secretAccessKey?: string,
+  region: string = 'us-east-1'
+): Promise<ServiceStatus> {
   if (!accessKeyId || !secretAccessKey) {
     return {
       status: 'not_configured',
-      message: 'AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY not set',
+      message: 'AWS credentials not provided',
     };
   }
 
@@ -347,15 +380,15 @@ async function checkFFprobe(): Promise<ServiceStatus> {
 }
 
 // ============================================================================
-// Route Handler
+// Route Handlers
 // ============================================================================
 
-export async function GET(): Promise<NextResponse> {
+async function runHealthCheck(credentials: ReturnType<typeof resolveHealthCredentials>): Promise<NextResponse> {
   // Run all checks in parallel
   const [openai, voyage, awsRekognition, ffmpeg, ffprobe] = await Promise.all([
-    checkOpenAI(),
-    checkVoyage(),
-    checkAWSRekognition(),
+    checkOpenAI(credentials.openaiApiKey),
+    checkVoyage(credentials.voyageApiKey),
+    checkAWSRekognition(credentials.awsAccessKeyId, credentials.awsSecretAccessKey, credentials.awsRegion),
     checkFFmpeg(),
     checkFFprobe(),
   ]);
@@ -403,3 +436,39 @@ export async function GET(): Promise<NextResponse> {
   });
 }
 
+/**
+ * POST /api/health
+ * Health check with credentials in JSON body
+ */
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const credentials = resolveHealthCredentials(body);
+    return runHealthCheck(credentials);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Invalid request' },
+      { status: 400 }
+    );
+  }
+}
+
+/**
+ * GET /api/health
+ * Health check with credentials from query params or secret_token
+ */
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const searchParams = request.nextUrl.searchParams;
+
+  const input: CredentialsInput = {
+    openaiApiKey: searchParams.get('openaiApiKey') || undefined,
+    voyageApiKey: searchParams.get('voyageApiKey') || undefined,
+    awsRegion: searchParams.get('awsRegion') || undefined,
+    awsAccessKeyId: searchParams.get('awsAccessKeyId') || undefined,
+    awsSecretAccessKey: searchParams.get('awsSecretAccessKey') || undefined,
+    secret_token: searchParams.get('secret_token') || undefined,
+  };
+
+  const credentials = resolveHealthCredentials(input);
+  return runHealthCheck(credentials);
+}

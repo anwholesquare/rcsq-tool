@@ -34,7 +34,8 @@ import { resolveCredentials, PartialCredentials } from '@/lib/credentials';
 // Constants
 // ============================================================================
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const DEFAULT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const DEFAULT_MAX_FRAMES = 1000;
 
 const ALLOWED_MIME_TYPES = new Set([
   'video/mp4',
@@ -73,6 +74,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // =========================================================================
+    // Extract optional parameters first (needed for validation)
+    // =========================================================================
+    const enableFaceDetection = formData.get('enableFaceDetection') !== 'false';
+    
+    // Optional: max_frame_limit (default: 1000)
+    const maxFrameLimitStr = formData.get('max_frame_limit')?.toString();
+    const maxFrameLimit = maxFrameLimitStr ? parseInt(maxFrameLimitStr, 10) : DEFAULT_MAX_FRAMES;
+    
+    // Optional: max_video_size in MB (default: 10 MB)
+    const maxVideoSizeStr = formData.get('max_video_size')?.toString();
+    const maxVideoSizeMB = maxVideoSizeStr ? parseFloat(maxVideoSizeStr) : (DEFAULT_MAX_FILE_SIZE_BYTES / 1024 / 1024);
+    const maxVideoSizeBytes = maxVideoSizeMB * 1024 * 1024;
+
+    // =========================================================================
     // Extract and validate file
     // =========================================================================
     const file = formData.get('file');
@@ -85,10 +100,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return errorResponse('Field "file" must be a file', 400);
     }
 
-    // Check file size
-    if (file.size > MAX_FILE_SIZE_BYTES) {
+    // Check file size against custom or default limit
+    if (file.size > maxVideoSizeBytes) {
       return errorResponse(
-        `File size exceeds maximum allowed (${MAX_FILE_SIZE_BYTES / 1024 / 1024} MB)`,
+        `File size exceeds maximum allowed (${maxVideoSizeMB} MB)`,
         413
       );
     }
@@ -106,11 +121,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         415
       );
     }
-
-    // =========================================================================
-    // Check for optional face detection flag
-    // =========================================================================
-    const enableFaceDetection = formData.get('enableFaceDetection') !== 'false';
 
     // =========================================================================
     // Extract credentials from form data or use secret_token
@@ -149,6 +159,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // =========================================================================
     // Run pipeline
     // =========================================================================
+    console.log(`[api/rcsq] Max frame limit: ${maxFrameLimit}, Max video size: ${maxVideoSizeMB} MB`);
+    
     const result = await runRcsqPipeline(
       {
         buffer,
@@ -159,7 +171,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
       {
         frameIntervalSec: 5,  // Extract frame every 5 seconds
-        maxFrames: 1000,      // Max 1000 frames
+        maxFrames: maxFrameLimit,
         onProgress: (stage, percent) => {
           console.log(`[api/rcsq] ${stage}: ${percent}%`);
         },

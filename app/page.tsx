@@ -643,7 +643,9 @@ export default function HomePage() {
   -F "awsRegion=us-east-1" \\
   -F "awsAccessKeyId=AKIA..." \\
   -F "awsSecretAccessKey=..." \\
-  -F "enableFaceDetection=true"`,
+  -F "enableFaceDetection=true" \\
+  -F "max_frame_limit=1000" \\
+  -F "max_video_size=10"`,
                                 'curl-rcsq'
                               )}
                             >
@@ -679,7 +681,9 @@ export default function HomePage() {
   -F "awsRegion=us-east-1" \\
   -F "awsAccessKeyId=AKIA..." \\
   -F "awsSecretAccessKey=..." \\
-  -F "enableFaceDetection=true"`}
+  -F "enableFaceDetection=true" \\
+  -F "max_frame_limit=1000" \\
+  -F "max_video_size=10"`}
                           </SyntaxHighlighter>
                         </div>
                         
@@ -781,6 +785,30 @@ export default function HomePage() {
                           </div>
                           <p className="text-sm text-muted-foreground">
                             Enable or disable face detection. Values: <code className="font-mono text-xs">"true"</code> or <code className="font-mono text-xs">"false"</code>. Default: <code className="font-mono text-xs">"true"</code>
+                          </p>
+                        </div>
+
+                        {/* max_frame_limit */}
+                        <div className="pl-4">
+                          <div className="flex items-center gap-2 mb-1">
+                            <code className="text-sm font-mono">max_frame_limit</code>
+                            <Badge variant="outline" className="text-xs">optional</Badge>
+                            <span className="text-xs text-muted-foreground">number</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Maximum number of frames to extract. Default: <code className="font-mono text-xs">1000</code>
+                          </p>
+                        </div>
+
+                        {/* max_video_size */}
+                        <div className="pl-4">
+                          <div className="flex items-center gap-2 mb-1">
+                            <code className="text-sm font-mono">max_video_size</code>
+                            <Badge variant="outline" className="text-xs">optional</Badge>
+                            <span className="text-xs text-muted-foreground">number</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Maximum video file size in MB. Default: <code className="font-mono text-xs">10</code>
                           </p>
                         </div>
 
@@ -972,6 +1000,9 @@ export default function HomePage() {
   -F "awsRegion=us-east-1" \\
   -F "awsAccessKeyId=AKIA..." \\
   -F "awsSecretAccessKey=..." \\
+  -F "enableFaceDetection=true" \\
+  -F "max_frame_limit=1000" \\
+  -F "max_video_size=10" \\
   --no-buffer`,
                                 'curl-stream'
                               )}
@@ -1008,6 +1039,9 @@ export default function HomePage() {
   -F "awsRegion=us-east-1" \\
   -F "awsAccessKeyId=AKIA..." \\
   -F "awsSecretAccessKey=..." \\
+  -F "enableFaceDetection=true" \\
+  -F "max_frame_limit=1000" \\
+  -F "max_video_size=10" \\
   --no-buffer`}
                           </SyntaxHighlighter>
                         </div>

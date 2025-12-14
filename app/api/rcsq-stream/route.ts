@@ -17,7 +17,8 @@ import { resolveCredentials, PartialCredentials } from '@/lib/credentials';
 // Constants
 // ============================================================================
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const DEFAULT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const DEFAULT_MAX_FRAMES = 1000;
 
 const ALLOWED_MIME_TYPES = new Set([
   'video/mp4',
@@ -81,8 +82,18 @@ export async function POST(request: NextRequest): Promise<Response> {
           return;
         }
 
-        if (file.size > MAX_FILE_SIZE_BYTES) {
-          sendError(`File size exceeds maximum (${MAX_FILE_SIZE_BYTES / 1024 / 1024} MB)`);
+        // =====================================================================
+        // Extract optional parameters
+        // =====================================================================
+        const maxFrameLimitStr = formData.get('max_frame_limit')?.toString();
+        const maxFrameLimit = maxFrameLimitStr ? parseInt(maxFrameLimitStr, 10) : DEFAULT_MAX_FRAMES;
+        
+        const maxVideoSizeStr = formData.get('max_video_size')?.toString();
+        const maxVideoSizeMB = maxVideoSizeStr ? parseFloat(maxVideoSizeStr) : (DEFAULT_MAX_FILE_SIZE_BYTES / 1024 / 1024);
+        const maxVideoSizeBytes = maxVideoSizeMB * 1024 * 1024;
+
+        if (file.size > maxVideoSizeBytes) {
+          sendError(`File size exceeds maximum (${maxVideoSizeMB} MB)`);
           return;
         }
 
@@ -132,6 +143,8 @@ export async function POST(request: NextRequest): Promise<Response> {
         // =====================================================================
         // Run pipeline with progress callback
         // =====================================================================
+        sendProgress('Starting pipeline', 5, `Max frames: ${maxFrameLimit}, Max size: ${maxVideoSizeMB} MB`);
+        
         const result = await runRcsqPipeline(
           {
             buffer,
@@ -142,7 +155,7 @@ export async function POST(request: NextRequest): Promise<Response> {
           },
           {
             frameIntervalSec: 5,
-            maxFrames: 1000,
+            maxFrames: maxFrameLimit,
             onProgress: (stage, percent) => {
               // Map internal stages to user-friendly names
               const stageMap: Record<string, string> = {

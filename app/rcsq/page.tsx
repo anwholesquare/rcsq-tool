@@ -157,8 +157,7 @@ type ResultTab = 'overview' | 'segments' | 'topics' | 'frames' | 'faces' | 'mode
 // Constants
 // ============================================================================
 
-const MAX_FILE_SIZE_MB = 10;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const DEFAULT_MAX_FILE_SIZE_MB = 10;
 const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska'];
 
 // ============================================================================
@@ -212,6 +211,8 @@ export default function RcsqPage() {
   const [awsAccessKeyId, setAwsAccessKeyId] = useState('');
   const [awsSecretAccessKey, setAwsSecretAccessKey] = useState('');
   const [enableFaceDetection, setEnableFaceDetection] = useState(true);
+  const [maxFrameLimit, setMaxFrameLimit] = useState<number>(1000);
+  const [maxVideoSize, setMaxVideoSize] = useState<number>(10);
 
   const [processingState, setProcessingState] = useState<ProcessingState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -294,8 +295,9 @@ export default function RcsqPage() {
       return;
     }
 
-    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
-      setError(`File too large. Maximum size is ${MAX_FILE_SIZE_MB} MB`);
+    const maxBytes = maxVideoSize * 1024 * 1024;
+    if (selectedFile.size > maxBytes) {
+      setError(`File too large. Maximum size is ${maxVideoSize} MB`);
       setFile(null);
       return;
     }
@@ -304,7 +306,7 @@ export default function RcsqPage() {
     setResult(null);
     setProcessingState('idle');
     setProgressLog([]);
-  }, []);
+  }, [maxVideoSize]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -342,6 +344,8 @@ export default function RcsqPage() {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('enableFaceDetection', String(enableFaceDetection));
+    formData.append('max_frame_limit', String(maxFrameLimit));
+    formData.append('max_video_size', String(maxVideoSize));
 
     if (authMode === 'token') {
       formData.append('secret_token', secretToken);
@@ -700,7 +704,7 @@ export default function RcsqPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Upload Video</CardTitle>
                   <CardDescription>
-                    Max {MAX_FILE_SIZE_MB} MB • MP4, WebM, MOV, MKV
+                    Max {maxVideoSize} MB • MP4, WebM, MOV, MKV
                   </CardDescription>
                 </CardHeader>
 
@@ -840,6 +844,40 @@ export default function RcsqPage() {
                               </div>
                             </div>
                           )}
+                        </div>
+
+                        <div className="pt-3 border-t">
+                          <p className="text-sm font-medium mb-3">Advanced Options</p>
+                          <div className="space-y-3">
+                            <div>
+                              <Label htmlFor="maxFrameLimit" className="text-xs">Max Frame Limit</Label>
+                              <Input
+                                id="maxFrameLimit"
+                                type="number"
+                                min="1"
+                                max="10000"
+                                value={maxFrameLimit}
+                                onChange={(e) => setMaxFrameLimit(parseInt(e.target.value) || 1000)}
+                                disabled={isProcessing}
+                                className="mt-1.5"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">Default: 1000 frames</p>
+                            </div>
+                            <div>
+                              <Label htmlFor="maxVideoSize" className="text-xs">Max Video Size (MB)</Label>
+                              <Input
+                                id="maxVideoSize"
+                                type="number"
+                                min="1"
+                                max="1024"
+                                value={maxVideoSize}
+                                onChange={(e) => setMaxVideoSize(parseFloat(e.target.value) || 10)}
+                                disabled={isProcessing}
+                                className="mt-1.5"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">Default: 10 MB</p>
+                            </div>
+                          </div>
                         </div>
                       </TabsContent>
                     </Tabs>

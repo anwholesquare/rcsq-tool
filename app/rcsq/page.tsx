@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -214,6 +214,7 @@ export default function RcsqPage() {
   const [resultTab, setResultTab] = useState<ResultTab>('overview');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const jsonInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
   const progressContainerRef = useRef<HTMLDivElement>(null);
@@ -464,6 +465,74 @@ export default function RcsqPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+    if (jsonInputRef.current) {
+      jsonInputRef.current.value = '';
+    }
+  }, []);
+
+  const handleImportJson = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    setError(null);
+
+    if (!selectedFile) {
+      return;
+    }
+
+    // Check file type
+    if (!selectedFile.name.endsWith('.json') && selectedFile.type !== 'application/json') {
+      setError('Please select a valid JSON file');
+      if (jsonInputRef.current) {
+        jsonInputRef.current.value = '';
+      }
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const parsed = JSON.parse(content);
+
+        // Basic validation - check for required fields
+        if (!parsed || typeof parsed !== 'object') {
+          throw new Error('Invalid JSON structure');
+        }
+
+        // Check for some expected fields
+        if (!parsed.video && !parsed.segments && !parsed.frames) {
+          throw new Error('JSON does not appear to be a valid RCSQ result. Missing expected fields.');
+        }
+
+        // Set the result
+        setResult(parsed as RcsqResult);
+        setProcessingState('complete');
+        setProgressLog([]);
+        setCurrentProgress(null);
+        setFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Invalid JSON';
+        setError(`JSON is invalid: ${message}`);
+        setResult(null);
+      }
+
+      // Reset the input
+      if (jsonInputRef.current) {
+        jsonInputRef.current.value = '';
+      }
+    };
+
+    reader.onerror = () => {
+      setError('Failed to read file');
+      if (jsonInputRef.current) {
+        jsonInputRef.current.value = '';
+      }
+    };
+
+    reader.readAsText(selectedFile);
   }, []);
 
   // -------------------------------------------------------------------------
@@ -671,6 +740,36 @@ export default function RcsqPage() {
                         Process Video
                       </>
                     )}
+                  </Button>
+
+                  {/* Divider */}
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-gray-500">or</span>
+                    </div>
+                  </div>
+
+                  {/* Import JSON */}
+                  <input
+                    ref={jsonInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={handleImportJson}
+                    disabled={isProcessing}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isProcessing}
+                    className="w-full"
+                    onClick={() => jsonInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Import JSON
                   </Button>
                 </form>
               </CardContent>
@@ -1217,11 +1316,11 @@ export default function RcsqPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white mt-8">
+      {/* <footer className="border-t border-gray-200 bg-white mt-8">
         <div className="container mx-auto max-w-7xl px-4 py-4 text-center text-sm text-gray-500">
           RCSQ Tool v1.0.0 • Video Preprocessing for Research Applications
         </div>
-      </footer>
+      </footer> */}
     </div>
   );
 }

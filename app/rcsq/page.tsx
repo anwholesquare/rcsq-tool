@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +11,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import {
   Upload,
   Key,
@@ -31,6 +35,10 @@ import {
   Image as ImageIcon,
   Mic,
   Eye,
+  ChevronRight,
+  Home,
+  Settings,
+  Menu,
 } from 'lucide-react';
 
 // ============================================================================
@@ -212,6 +220,7 @@ export default function RcsqPage() {
   const [currentProgress, setCurrentProgress] = useState<ProgressEvent | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [resultTab, setResultTab] = useState<ResultTab>('overview');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
@@ -535,6 +544,42 @@ export default function RcsqPage() {
     reader.readAsText(selectedFile);
   }, []);
 
+  const handleDemoImport = useCallback(async () => {
+    setError(null);
+    try {
+      const response = await fetch('/demo.json');
+      if (!response.ok) {
+        throw new Error('Failed to load demo file');
+      }
+      
+      const parsed = await response.json();
+
+      // Basic validation - check for required fields
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Invalid JSON structure');
+      }
+
+      // Check for some expected fields
+      if (!parsed.video && !parsed.segments && !parsed.frames) {
+        throw new Error('JSON does not appear to be a valid RCSQ result. Missing expected fields.');
+      }
+
+      // Set the result
+      setResult(parsed as RcsqResult);
+      setProcessingState('complete');
+      setProgressLog([]);
+      setCurrentProgress(null);
+      setFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load demo';
+      setError(`Demo import failed: ${message}`);
+      setResult(null);
+    }
+  }, []);
+
   // -------------------------------------------------------------------------
   // Derived State
   // -------------------------------------------------------------------------
@@ -549,47 +594,127 @@ export default function RcsqPage() {
   // Render
   // -------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="container mx-auto max-w-7xl px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">RCSQ Tool</h1>
-              <p className="text-sm text-gray-500">Video Preprocessing for Research</p>
-            </div>
-            <Badge variant="outline" className="font-mono">v1.0.0</Badge>
+    <div className="flex min-h-screen bg-background">
+      {/* Sidebar */}
+      <aside className="hidden md:flex w-64 flex-col fixed inset-y-0 z-50 border-r bg-background">
+        <div className="flex h-14 items-center border-b px-4">
+          <Link href="/" className="flex items-center gap-2">
+            <Image 
+              src="/logo.png" 
+              alt="RCSQ Logo" 
+              width={32} 
+              height={32}
+            />
+            <span className="font-semibold">RCSQ</span>
+          </Link>
+        </div>
+        <nav className="flex-1 space-y-1 p-4">
+          <Link
+            href="/"
+            className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:bg-secondary/50 transition-colors"
+          >
+            <Home className="w-4 h-4" />
+            Documentation
+          </Link>
+          <div className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md bg-secondary text-secondary-foreground">
+            <Cpu className="w-4 h-4" />
+            Process Video
+          </div>
+        </nav>
+        <div className="p-4 border-t">
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p className="font-medium">Quick Start</p>
+            <p>1. Upload video (max 10MB)</p>
+            <p>2. Enter API credentials</p>
+            <p>3. Click Process Video</p>
           </div>
         </div>
-      </header>
+      </aside>
 
-      <main className="container mx-auto max-w-7xl px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Upload Form */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Upload Card */}
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Upload className="h-5 w-5 text-blue-600" />
-                  Upload Video
-                </CardTitle>
-                <CardDescription>
-                  Select a video file to process (max {MAX_FILE_SIZE_MB} MB)
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {/* File Input */}
-                  <div
-                    className={`
-                      relative border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors
-                      ${file ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}
-                      ${isProcessing ? 'pointer-events-none opacity-50' : ''}
-                    `}
-                    onClick={() => !isProcessing && fileInputRef.current?.click()}
+      {/* Main Content */}
+      <main className="flex-1 md:pl-64">
+        {/* Header */}
+        <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex h-14 items-center px-4 sm:px-6">
+            {/* Mobile Menu Button */}
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="md:hidden mr-2">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Toggle menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-64 p-0">
+                <div className="flex h-14 items-center border-b px-4">
+                  <Link href="/" className="flex items-center gap-2">
+                    <Image 
+                      src="/logo.png" 
+                      alt="RCSQ Logo" 
+                      width={32} 
+                      height={32}
+                    />
+                    <span className="font-semibold">RCSQ</span>
+                  </Link>
+                </div>
+                <nav className="flex-1 space-y-1 p-4">
+                  <Link
+                    href="/"
+                    className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:bg-secondary/50 transition-colors"
+                    onClick={() => setMobileMenuOpen(false)}
                   >
+                    <Home className="w-4 h-4" />
+                    Documentation
+                  </Link>
+                  <div className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md bg-secondary text-secondary-foreground">
+                    <Cpu className="w-4 h-4" />
+                    Process Video
+                  </div>
+                </nav>
+                <div className="p-4 border-t">
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p className="font-medium">Quick Start</p>
+                    <p>1. Upload video (max 10MB)</p>
+                    <p>2. Enter API credentials</p>
+                    <p>3. Click Process Video</p>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold">Video Processing</h1>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
+            </div>
+          </div>
+        </header>
+
+        {/* Content */}
+        <div className="flex-1 p-4 sm:p-6 md:p-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Upload Form */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Upload Card */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Upload Video</CardTitle>
+                  <CardDescription>
+                    Max {MAX_FILE_SIZE_MB} MB • MP4, WebM, MOV, MKV
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* File Input */}
+                    <div
+                      className={`
+                        relative border-2 border-dashed rounded-md p-6 text-center cursor-pointer transition-colors
+                        ${file ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/50'}
+                        ${isProcessing ? 'pointer-events-none opacity-50' : ''}
+                      `}
+                      onClick={() => !isProcessing && fileInputRef.current?.click()}
+                    >
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -599,728 +724,711 @@ export default function RcsqPage() {
                       className="hidden"
                     />
                     
-                    {file ? (
-                      <div className="space-y-1">
-                        <FileVideo className="h-8 w-8 mx-auto text-blue-600" />
-                        <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-                        <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                      {file ? (
+                        <div className="space-y-2">
+                          <FileVideo className="h-10 w-10 mx-auto text-primary" />
+                          <p className="text-sm font-medium truncate">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
+                          <p className="text-sm font-medium">Click to upload</p>
+                          <p className="text-xs text-muted-foreground">Drag & drop or browse</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Auth Mode */}
+                    <Tabs value={authMode} onValueChange={(v) => setAuthMode(v as AuthMode)}>
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="token" disabled={isProcessing} className="text-xs">
+                          <Key className="h-3 w-3 mr-1" />
+                          Token
+                        </TabsTrigger>
+                        <TabsTrigger value="keys" disabled={isProcessing} className="text-xs">
+                          <Key className="h-3 w-3 mr-1" />
+                          API Keys
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="token" className="mt-3 space-y-3">
+                        <div>
+                          <Label htmlFor="secretToken" className="text-xs">Secret Token</Label>
+                          <Input
+                            id="secretToken"
+                            type="password"
+                            placeholder="Enter token"
+                            value={secretToken}
+                            onChange={(e) => setSecretToken(e.target.value)}
+                            disabled={isProcessing}
+                            className="mt-1.5"
+                          />
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="keys" className="mt-3 space-y-3">
+                        <div>
+                          <Label htmlFor="openaiKey" className="text-xs">OpenAI API Key *</Label>
+                          <Input
+                            id="openaiKey"
+                            type="password"
+                            placeholder="sk-..."
+                            value={openaiKey}
+                            onChange={(e) => setOpenaiKey(e.target.value)}
+                            disabled={isProcessing}
+                            className="mt-1.5"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="voyageKey" className="text-xs">Voyage API Key *</Label>
+                          <Input
+                            id="voyageKey"
+                            type="password"
+                            placeholder="pa-..."
+                            value={voyageKey}
+                            onChange={(e) => setVoyageKey(e.target.value)}
+                            disabled={isProcessing}
+                            className="mt-1.5"
+                          />
+                        </div>
+
+                        <div className="pt-3 border-t">
+                          <label className="flex items-center gap-2 cursor-pointer text-sm font-medium mb-3">
+                            <input
+                              type="checkbox"
+                              checked={enableFaceDetection}
+                              onChange={(e) => setEnableFaceDetection(e.target.checked)}
+                              disabled={isProcessing}
+                              className="rounded"
+                            />
+                            Face Detection (AWS)
+                          </label>
+
+                          {enableFaceDetection && (
+                            <div className="space-y-3 pl-6">
+                              <div>
+                                <Label className="text-xs">AWS Region</Label>
+                                <Input
+                                  type="text"
+                                  value={awsRegion}
+                                  onChange={(e) => setAwsRegion(e.target.value)}
+                                  disabled={isProcessing}
+                                  className="mt-1.5"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Access Key ID *</Label>
+                                <Input
+                                  type="password"
+                                  placeholder="AKIA..."
+                                  value={awsAccessKeyId}
+                                  onChange={(e) => setAwsAccessKeyId(e.target.value)}
+                                  disabled={isProcessing}
+                                  className="mt-1.5"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Secret Access Key *</Label>
+                                <Input
+                                  type="password"
+                                  value={awsSecretAccessKey}
+                                  onChange={(e) => setAwsSecretAccessKey(e.target.value)}
+                                  disabled={isProcessing}
+                                  className="mt-1.5"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+
+                    {/* Error */}
+                    {error && (
+                      <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription className="text-sm">{error}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Submit */}
+                    <Button type="submit" disabled={!canSubmit} className="w-full">
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Cpu className="h-4 w-4 mr-2" />
+                          Process Video
+                        </>
+                      )}
+                    </Button>
+
+                    {/* Divider */}
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t" />
                       </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <Upload className="h-8 w-8 mx-auto text-gray-400" />
-                        <p className="text-sm text-gray-600">Click to upload</p>
-                        <p className="text-xs text-gray-400">MP4, WebM, MOV, MKV</p>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground">or</span>
+                      </div>
+                    </div>
+
+                    {/* Import JSON */}
+                    <input
+                      ref={jsonInputRef}
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={handleImportJson}
+                      disabled={isProcessing}
+                      className="hidden"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isProcessing}
+                        onClick={() => jsonInputRef.current?.click()}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Import JSON
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={isProcessing}
+                        onClick={handleDemoImport}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Demo Import
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* Progress Log */}
+              {(isProcessing || progressLog.length > 0) && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        {isProcessing && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                        Processing Log
+                      </span>
+                      <Badge variant="outline" className="font-mono text-xs">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {formatTime(elapsedTime)}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {currentProgress && (
+                      <div className="mb-3">
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="font-medium">{currentProgress.stage}</span>
+                          <span className="text-muted-foreground">{currentProgress.percent}%</span>
+                        </div>
+                        <Progress value={currentProgress.percent} className="h-2" />
                       </div>
                     )}
+
+                    <div
+                      ref={progressContainerRef}
+                      className="max-h-64 overflow-y-auto space-y-1 font-mono text-xs bg-muted rounded-md p-3"
+                    >
+                      {progressLog.map((log, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="text-muted-foreground shrink-0">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </span>
+                          <span>{log.stage}</span>
+                          <span className="text-primary">{log.percent}%</span>
+                          {log.details && <span className="text-muted-foreground">{log.details}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Right Column - Results */}
+            <div className="lg:col-span-2">
+              {processingState === 'complete' && result ? (
+                <div className="space-y-4">
+                  {/* Success Banner */}
+                  <Card className="bg-emerald-50 border-emerald-200">
+                    <CardContent className="pt-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-full bg-emerald-500 p-2">
+                            <CheckCircle2 className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-emerald-900">Processing Complete</p>
+                            <p className="text-sm text-emerald-700">
+                              Completed in {(result.stats?.processing_time_sec ?? 0).toFixed(1)}s
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={handleReset}>
+                            <X className="h-4 w-4 mr-1" />
+                            Clear
+                          </Button>
+                          <Button size="sm" onClick={handleDownload}>
+                            <Download className="h-4 w-4 mr-1" />
+                            Download
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Stats Overview */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Segments</CardTitle>
+                        <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{result.stats?.total_segments ?? 0}</div>
+                        <p className="text-xs text-muted-foreground">Transcript parts</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Topics</CardTitle>
+                        <Layers className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{result.stats?.total_topics ?? 0}</div>
+                        <p className="text-xs text-muted-foreground">Extracted themes</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Frames</CardTitle>
+                        <Film className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{result.stats?.total_frames ?? 0}</div>
+                        <p className="text-xs text-muted-foreground">Keyframes captured</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Faces</CardTitle>
+                        <User className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{result.stats?.total_faces ?? 0}</div>
+                        <p className="text-xs text-muted-foreground">Faces detected</p>
+                      </CardContent>
+                    </Card>
                   </div>
 
-                  {/* Auth Mode */}
-                  <Tabs value={authMode} onValueChange={(v) => setAuthMode(v as AuthMode)}>
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="token" disabled={isProcessing}>
-                        <Key className="h-3 w-3 mr-1" />
-                        Token
+                  {/* Result Tabs */}
+                  <Tabs value={resultTab} onValueChange={(v) => setResultTab(v as ResultTab)}>
+                    <TabsList className="grid grid-cols-7 h-auto w-full">
+                      <TabsTrigger value="overview" className="text-xs py-2">
+                        Overview
                       </TabsTrigger>
-                      <TabsTrigger value="keys" disabled={isProcessing}>
-                        <Key className="h-3 w-3 mr-1" />
-                        API Keys
+                      <TabsTrigger value="segments" className="text-xs py-2">
+                        Segments
+                      </TabsTrigger>
+                      <TabsTrigger value="topics" className="text-xs py-2">
+                        Topics
+                      </TabsTrigger>
+                      <TabsTrigger value="frames" className="text-xs py-2">
+                        Frames
+                      </TabsTrigger>
+                      <TabsTrigger value="faces" className="text-xs py-2">
+                        Faces
+                      </TabsTrigger>
+                      <TabsTrigger value="models" className="text-xs py-2">
+                        Models
+                      </TabsTrigger>
+                      <TabsTrigger value="costs" className="text-xs py-2">
+                        Costs
                       </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="token" className="mt-3 space-y-3">
-                      <div>
-                        <Label htmlFor="secretToken" className="text-xs text-gray-600">Secret Token</Label>
-                        <Input
-                          id="secretToken"
-                          type="password"
-                          placeholder="Enter token"
-                          value={secretToken}
-                          onChange={(e) => setSecretToken(e.target.value)}
-                          disabled={isProcessing}
-                          className="mt-1"
-                        />
-                      </div>
+                    {/* Overview Tab */}
+                    <TabsContent value="overview" className="mt-4 space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Video Information</CardTitle>
+                          <CardDescription>Technical metadata and identifiers</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <p className="text-muted-foreground text-xs">Filename</p>
+                              <p className="font-medium truncate">{result.video?.source?.filename ?? 'Unknown'}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground text-xs">Duration</p>
+                              <p className="font-medium">{formatDuration(result.video?.technical?.duration_sec ?? 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground text-xs">Resolution</p>
+                              <p className="font-medium">{result.video?.technical?.width ?? 0}×{result.video?.technical?.height ?? 0}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground text-xs">Frame Rate</p>
+                              <p className="font-medium">{(result.video?.technical?.frame_rate_fps ?? 0).toFixed(2)} fps</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground text-xs">File Size</p>
+                              <p className="font-medium">{formatFileSize(result.video?.source?.filesize_bytes ?? 0)}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground text-xs">Audio</p>
+                              <p className="font-medium">{result.video?.technical?.audio_sample_rate_hz ?? 0} Hz</p>
+                            </div>
+                          </div>
+                          <div className="mt-4 pt-4 border-t space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Video ID</span>
+                              <code className="font-mono text-xs">{result.video?.rcsq_video_id ?? 'N/A'}</code>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">MD5 Hash</span>
+                              <code className="font-mono text-xs truncate max-w-xs">{result.video?.hashes?.md5 ?? 'N/A'}</code>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Processing Time</span>
+                              <span className="font-medium">{(result.stats?.processing_time_sec ?? 0).toFixed(2)}s</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
                     </TabsContent>
 
-                    <TabsContent value="keys" className="mt-3 space-y-3">
-                      <div>
-                        <Label htmlFor="openaiKey" className="text-xs text-gray-600">OpenAI API Key *</Label>
-                        <Input
-                          id="openaiKey"
-                          type="password"
-                          placeholder="sk-..."
-                          value={openaiKey}
-                          onChange={(e) => setOpenaiKey(e.target.value)}
-                          disabled={isProcessing}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="voyageKey" className="text-xs text-gray-600">Voyage API Key *</Label>
-                        <Input
-                          id="voyageKey"
-                          type="password"
-                          placeholder="pa-..."
-                          value={voyageKey}
-                          onChange={(e) => setVoyageKey(e.target.value)}
-                          disabled={isProcessing}
-                          className="mt-1"
-                        />
-                      </div>
-
-                      <div className="pt-2 border-t">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={enableFaceDetection}
-                            onChange={(e) => setEnableFaceDetection(e.target.checked)}
-                            disabled={isProcessing}
-                            className="rounded"
-                          />
-                          <span className="text-sm text-gray-700">Face Detection (AWS)</span>
-                        </label>
-
-                        {enableFaceDetection && (
-                          <div className="mt-2 space-y-2 pl-6">
-                            <div>
-                              <Label className="text-xs text-gray-500">AWS Region</Label>
-                              <Input
-                                type="text"
-                                value={awsRegion}
-                                onChange={(e) => setAwsRegion(e.target.value)}
-                                disabled={isProcessing}
-                                className="mt-1"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs text-gray-500">Access Key ID *</Label>
-                              <Input
-                                type="password"
-                                placeholder="AKIA..."
-                                value={awsAccessKeyId}
-                                onChange={(e) => setAwsAccessKeyId(e.target.value)}
-                                disabled={isProcessing}
-                                className="mt-1"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs text-gray-500">Secret Access Key *</Label>
-                              <Input
-                                type="password"
-                                value={awsSecretAccessKey}
-                                onChange={(e) => setAwsSecretAccessKey(e.target.value)}
-                                disabled={isProcessing}
-                                className="mt-1"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-
-                  {/* Error */}
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertTriangle className="h-4 w-4" />
-                      <AlertDescription className="text-sm">{error}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Submit */}
-                  <Button type="submit" disabled={!canSubmit} className="w-full">
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Cpu className="h-4 w-4 mr-2" />
-                        Process Video
-                      </>
-                    )}
-                  </Button>
-
-                  {/* Divider */}
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-2 text-gray-500">or</span>
-                    </div>
-                  </div>
-
-                  {/* Import JSON */}
-                  <input
-                    ref={jsonInputRef}
-                    type="file"
-                    accept=".json,application/json"
-                    onChange={handleImportJson}
-                    disabled={isProcessing}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isProcessing}
-                    className="w-full"
-                    onClick={() => jsonInputRef.current?.click()}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Import JSON
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            {/* Progress Log */}
-            {(isProcessing || progressLog.length > 0) && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2">
-                      {isProcessing && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
-                      Processing Log
-                    </span>
-                    <Badge variant="outline" className="font-mono">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {formatTime(elapsedTime)}
-                    </Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {currentProgress && (
-                    <div className="mb-3">
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-700 font-medium">{currentProgress.stage}</span>
-                        <span className="text-gray-500">{currentProgress.percent}%</span>
-                      </div>
-                      <Progress value={currentProgress.percent} className="h-2" />
-                    </div>
-                  )}
-
-                  <div
-                    ref={progressContainerRef}
-                    className="max-h-64 overflow-y-auto space-y-1 font-mono text-xs bg-gray-50 rounded p-2"
-                  >
-                    {progressLog.map((log, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <span className="text-gray-400 shrink-0">
-                          {new Date(log.timestamp).toLocaleTimeString()}
-                        </span>
-                        <span className="text-gray-700">{log.stage}</span>
-                        <span className="text-blue-600">{log.percent}%</span>
-                        {log.details && <span className="text-gray-500">{log.details}</span>}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Right Column - Results */}
-          <div className="lg:col-span-2">
-            {processingState === 'complete' && result ? (
-              <div className="space-y-4">
-                {/* Success Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-green-700">
-                    <CheckCircle2 className="h-5 w-5" />
-                    <span className="font-medium">Processing Complete</span>
-                    <Badge variant="secondary">
-                      {(result.stats?.processing_time_sec ?? 0).toFixed(1)}s
-                    </Badge>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handleReset}>
-                      <X className="h-4 w-4 mr-1" />
-                      Clear
-                    </Button>
-                    <Button size="sm" onClick={handleDownload}>
-                      <Download className="h-4 w-4 mr-1" />
-                      Download JSON
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Result Tabs */}
-                <Tabs value={resultTab} onValueChange={(v) => setResultTab(v as ResultTab)}>
-                  <TabsList className="grid grid-cols-7 h-auto">
-                    <TabsTrigger value="overview" className="text-xs py-2">
-                      <Info className="h-3 w-3 mr-1" />
-                      Overview
-                    </TabsTrigger>
-                    <TabsTrigger value="segments" className="text-xs py-2">
-                      <MessageSquare className="h-3 w-3 mr-1" />
-                      Segments ({result.stats?.total_segments ?? 0})
-                    </TabsTrigger>
-                    <TabsTrigger value="topics" className="text-xs py-2">
-                      <Layers className="h-3 w-3 mr-1" />
-                      Topics ({result.stats?.total_topics ?? 0})
-                    </TabsTrigger>
-                    <TabsTrigger value="frames" className="text-xs py-2">
-                      <Film className="h-3 w-3 mr-1" />
-                      Frames ({result.stats?.total_frames ?? 0})
-                    </TabsTrigger>
-                    <TabsTrigger value="faces" className="text-xs py-2">
-                      <User className="h-3 w-3 mr-1" />
-                      Faces ({result.stats?.total_faces ?? 0})
-                    </TabsTrigger>
-                    <TabsTrigger value="models" className="text-xs py-2">
-                      <Cpu className="h-3 w-3 mr-1" />
-                      Models
-                    </TabsTrigger>
-                    <TabsTrigger value="costs" className="text-xs py-2">
-                      <DollarSign className="h-3 w-3 mr-1" />
-                      Costs
-                    </TabsTrigger>
-                  </TabsList>
-
-                  {/* Overview Tab */}
-                  <TabsContent value="overview" className="mt-4 space-y-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <FileVideo className="h-4 w-4 text-blue-600" />
-                          Video Information
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-500">Filename</p>
-                            <p className="font-medium truncate">{result.video?.source?.filename ?? 'Unknown'}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Duration</p>
-                            <p className="font-medium">{formatDuration(result.video?.technical?.duration_sec ?? 0)}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Resolution</p>
-                            <p className="font-medium">{result.video?.technical?.width ?? 0}×{result.video?.technical?.height ?? 0}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Frame Rate</p>
-                            <p className="font-medium">{(result.video?.technical?.frame_rate_fps ?? 0).toFixed(2)} fps</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">File Size</p>
-                            <p className="font-medium">{formatFileSize(result.video?.source?.filesize_bytes ?? 0)}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">MIME Type</p>
-                            <p className="font-medium">{result.video?.source?.mime_type ?? 'Unknown'}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">Audio</p>
-                            <p className="font-medium">{result.video?.technical?.audio_sample_rate_hz ?? 0} Hz, {result.video?.technical?.audio_channels ?? 0}ch</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500">MD5 Hash</p>
-                            <p className="font-mono text-xs truncate">{result.video?.hashes?.md5 ?? 'N/A'}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <Card className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-purple-100">
-                            <MessageSquare className="h-5 w-5 text-purple-600" />
-                          </div>
-                          <div>
-                            <p className="text-2xl font-bold">{result.stats?.total_segments ?? 0}</p>
-                            <p className="text-xs text-gray-500">Segments</p>
-                          </div>
-                        </div>
-                      </Card>
-                      <Card className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-blue-100">
-                            <Layers className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="text-2xl font-bold">{result.stats?.total_topics ?? 0}</p>
-                            <p className="text-xs text-gray-500">Topics</p>
-                          </div>
-                        </div>
-                      </Card>
-                      <Card className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-green-100">
-                            <Film className="h-5 w-5 text-green-600" />
-                          </div>
-                          <div>
-                            <p className="text-2xl font-bold">{result.stats?.total_frames ?? 0}</p>
-                            <p className="text-xs text-gray-500">Frames</p>
-                          </div>
-                        </div>
-                      </Card>
-                      <Card className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-orange-100">
-                            <User className="h-5 w-5 text-orange-600" />
-                          </div>
-                          <div>
-                            <p className="text-2xl font-bold">{result.stats?.total_faces ?? 0}</p>
-                            <p className="text-xs text-gray-500">Faces</p>
-                          </div>
-                        </div>
-                      </Card>
-                    </div>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Hash className="h-4 w-4 text-gray-600" />
-                          Identifiers
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="text-sm">
-                        <div className="grid grid-cols-1 gap-2">
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Video ID</span>
-                            <code className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{result.video?.rcsq_video_id ?? 'N/A'}</code>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Created At</span>
-                            <span>{result.created_at ? new Date(result.created_at).toLocaleString() : 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">Tool Version</span>
-                            <span>{result.tool ?? 'rcsq-tool'} v{result.version ?? '1.0.0'}</span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  {/* Segments Tab */}
-                  <TabsContent value="segments" className="mt-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Transcript Segments</CardTitle>
-                        <CardDescription>
-                          {result.segments?.length ?? 0} segments with embeddings ({result.models?.text_embedding?.dimension ?? 1024}d)
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                          {(result.segments ?? []).map((segment, i) => (
-                            <div key={i} className="border rounded-lg p-3 bg-gray-50">
-                              <div className="flex items-center justify-between mb-2">
-                                <Badge variant="outline" className="font-mono text-xs">
-                                  seg_{String(segment?.segment_id ?? i + 1).padStart(4, '0')}
-                                </Badge>
-                                <div className="flex items-center gap-2 text-xs text-gray-500">
-                                  <Clock className="h-3 w-3" />
-                                  {formatTimestamp(segment?.time?.start_sec ?? 0)} - {formatTimestamp(segment?.time?.end_sec ?? 0)}
-                                  <span className="text-gray-400">|</span>
-                                  <span>Conf: {((segment?.transcript?.avg_confidence ?? 0) * 100).toFixed(1)}%</span>
-                                </div>
-                              </div>
-                              <p className="text-sm text-gray-700">{segment?.transcript?.text ?? ''}</p>
-                              <div className="mt-2 text-xs text-gray-400">
-                                Embedding: [{segment?.text_embedding?.vector?.slice(0, 3).map(v => v?.toFixed?.(4) ?? '0').join(', ') ?? ''}... ] ({segment?.text_embedding?.model ?? 'unknown'})
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  {/* Topics Tab */}
-                  <TabsContent value="topics" className="mt-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Extracted Topics</CardTitle>
-                        <CardDescription>
-                          Topics extracted using {result.models?.topic_extraction?.name ?? 'GPT'}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4 max-h-[600px] overflow-y-auto">
-                          {(result.topics ?? []).map((topic, i) => (
-                            <div key={i} className="border rounded-lg p-4">
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
-                                  <Badge className="mb-2">{topic?.label ?? 'Topic'}</Badge>
-                                  <p className="text-sm text-gray-600">{topic?.description ?? ''}</p>
-                                </div>
-                                <code className="text-xs text-gray-400 font-mono">{topic?.topic_id ?? ''}</code>
-                              </div>
-                              <div className="mt-3 p-3 bg-gray-50 rounded">
-                                <p className="text-sm text-gray-700">{topic?.summary?.text ?? ''}</p>
-                                <p className="text-xs text-gray-400 mt-2">Summarized by: {topic?.summary?.model ?? 'unknown'}</p>
-                              </div>
-                              <div className="mt-3 flex flex-wrap gap-1">
-                                {(topic?.segment_ids ?? []).map((segId, j) => (
-                                  <Badge key={j} variant="outline" className="text-xs font-mono">{segId}</Badge>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  {/* Frames Tab */}
-                  <TabsContent value="frames" className="mt-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Extracted Frames</CardTitle>
-                        <CardDescription>
-                          Captioned with {result.models?.captioning?.name ?? 'GPT'}, embedded with {result.models?.image_embedding?.name ?? 'Voyage'}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[700px] overflow-y-auto">
-                          {(result.frames ?? []).map((frame, i) => (
-                            <div key={i} className="border rounded-lg overflow-hidden">
-                              <div className="aspect-video bg-gray-100 relative">
-                                {frame?.image?.data_base64 ? (
-                                  <img
-                                    src={`data:${frame.image.encoding ?? 'image/jpeg'};base64,${frame.image.data_base64}`}
-                                    alt={`Frame at ${formatTimestamp(frame?.time?.timestamp_sec ?? 0)}`}
-                                    className="w-full h-full object-contain"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-gray-400">No image</div>
-                                )}
-                                <Badge className="absolute top-2 left-2 font-mono text-xs">
-                                  {formatTimestamp(frame?.time?.timestamp_sec ?? 0)}
-                                </Badge>
-                              </div>
-                              <div className="p-3">
-                                <code className="text-xs text-gray-400 font-mono">{frame?.frame_id ?? ''}</code>
-                                <p className="text-sm text-gray-700 mt-1">{frame?.caption?.text ?? ''}</p>
-                                <p className="text-xs text-gray-400 mt-2">
-                                  Embedding: {frame?.image_embedding?.model ?? 'unknown'} ({frame?.image_embedding?.vector?.length ?? 0}d)
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  {/* Faces Tab */}
-                  <TabsContent value="faces" className="mt-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Detected Faces</CardTitle>
-                        <CardDescription>
-                          Detected with {result.models?.face_detection?.name ?? 'Rekognition'}, embedded with {result.models?.image_embedding?.name ?? 'Voyage'}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {!result.faces || result.faces.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500">
-                            <User className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                            <p>No faces detected in this video</p>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[600px] overflow-y-auto">
-                            {result.faces.map((face, i) => (
-                              <div key={i} className="border rounded-lg overflow-hidden">
-                                <div className="aspect-square bg-gray-100">
-                                  {face?.image?.data_base64 ? (
-                                    <img
-                                      src={`data:${face.image.encoding ?? 'image/jpeg'};base64,${face.image.data_base64}`}
-                                      alt={`Face ${i + 1}`}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-400">No image</div>
-                                  )}
-                                </div>
-                                <div className="p-2 text-xs">
-                                  <code className="text-gray-400 font-mono block">{face?.face_id ?? ''}</code>
-                                  <div className="flex items-center gap-1 mt-1 text-gray-500">
+                    {/* Segments Tab */}
+                    <TabsContent value="segments" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Transcript Segments</CardTitle>
+                          <CardDescription>
+                            {result.segments?.length ?? 0} segments with {result.models?.text_embedding?.dimension ?? 1024}-dimensional embeddings
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                            {(result.segments ?? []).map((segment, i) => (
+                              <div key={i} className="border rounded-md p-3 hover:bg-muted/50 transition-colors">
+                                <div className="flex items-center justify-between mb-2">
+                                  <Badge variant="outline" className="font-mono text-xs">
+                                    seg_{String(segment?.segment_id ?? i + 1).padStart(4, '0')}
+                                  </Badge>
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     <Clock className="h-3 w-3" />
-                                    {formatTimestamp(face?.time?.timestamp_sec ?? 0)}
+                                    {formatTimestamp(segment?.time?.start_sec ?? 0)} - {formatTimestamp(segment?.time?.end_sec ?? 0)}
+                                    <span>•</span>
+                                    <span>Conf: {((segment?.transcript?.avg_confidence ?? 0) * 100).toFixed(1)}%</span>
                                   </div>
-                                  <div className="flex items-center gap-1 text-gray-500">
-                                    <Film className="h-3 w-3" />
-                                    {face?.frame_id ?? ''}
-                                  </div>
+                                </div>
+                                <p className="text-sm">{segment?.transcript?.text ?? ''}</p>
+                                <div className="mt-2 text-xs text-muted-foreground font-mono">
+                                  [{segment?.text_embedding?.vector?.slice(0, 3).map(v => v?.toFixed?.(4) ?? '0').join(', ') ?? ''}...]
                                 </div>
                               </div>
                             ))}
                           </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
 
-                  {/* Models Tab */}
-                  <TabsContent value="models" className="mt-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Models Used</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="border rounded-lg p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Mic className="h-4 w-4 text-purple-600" />
-                                <span className="font-medium">Transcription</span>
+                    {/* Topics Tab */}
+                    <TabsContent value="topics" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Extracted Topics</CardTitle>
+                          <CardDescription>
+                            Extracted using {result.models?.topic_extraction?.name ?? 'GPT'}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                            {(result.topics ?? []).map((topic, i) => (
+                              <div key={i} className="border rounded-md p-4">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className="flex-1">
+                                    <Badge className="mb-2">{topic?.label ?? 'Topic'}</Badge>
+                                    <p className="text-sm text-muted-foreground">{topic?.description ?? ''}</p>
+                                  </div>
+                                  <code className="text-xs text-muted-foreground font-mono">{topic?.topic_id ?? ''}</code>
+                                </div>
+                                <div className="mt-3 p-3 bg-muted rounded-md">
+                                  <p className="text-sm">{topic?.summary?.text ?? ''}</p>
+                                  <p className="text-xs text-muted-foreground mt-2">Model: {topic?.summary?.model ?? 'unknown'}</p>
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  {(topic?.segment_ids ?? []).map((segId, j) => (
+                                    <Badge key={j} variant="outline" className="text-xs font-mono">{segId}</Badge>
+                                  ))}
+                                </div>
                               </div>
-                              <p className="text-sm text-gray-600">{result.models?.transcription?.name ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Provider: {result.models?.transcription?.provider ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Language: {result.models?.transcription?.language ?? 'N/A'}</p>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    {/* Frames Tab */}
+                    <TabsContent value="frames" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Extracted Frames</CardTitle>
+                          <CardDescription>
+                            Captioned with {result.models?.captioning?.name ?? 'GPT'} • Embedded with {result.models?.image_embedding?.name ?? 'Voyage'}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[700px] overflow-y-auto">
+                            {(result.frames ?? []).map((frame, i) => (
+                              <div key={i} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow">
+                                <div className="aspect-video bg-muted relative">
+                                  {frame?.image?.data_base64 ? (
+                                    <img
+                                      src={`data:${frame.image.encoding ?? 'image/jpeg'};base64,${frame.image.data_base64}`}
+                                      alt={`Frame at ${formatTimestamp(frame?.time?.timestamp_sec ?? 0)}`}
+                                      className="w-full h-full object-contain"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">No image</div>
+                                  )}
+                                  <Badge className="absolute top-2 left-2 font-mono text-xs">
+                                    {formatTimestamp(frame?.time?.timestamp_sec ?? 0)}
+                                  </Badge>
+                                </div>
+                                <div className="p-3">
+                                  <code className="text-xs text-muted-foreground font-mono block mb-2">{frame?.frame_id ?? ''}</code>
+                                  <p className="text-sm">{frame?.caption?.text ?? ''}</p>
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    {frame?.image_embedding?.model ?? 'unknown'} • {frame?.image_embedding?.vector?.length ?? 0}d
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    {/* Faces Tab */}
+                    <TabsContent value="faces" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Detected Faces</CardTitle>
+                          <CardDescription>
+                            Detected with {result.models?.face_detection?.name ?? 'Rekognition'} • Embedded with {result.models?.image_embedding?.name ?? 'Voyage'}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {!result.faces || result.faces.length === 0 ? (
+                            <div className="text-center py-12 text-muted-foreground">
+                              <User className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
+                              <p>No faces detected in this video</p>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[600px] overflow-y-auto">
+                              {result.faces.map((face, i) => (
+                                <div key={i} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow">
+                                  <div className="aspect-square bg-muted">
+                                    {face?.image?.data_base64 ? (
+                                      <img
+                                        src={`data:${face.image.encoding ?? 'image/jpeg'};base64,${face.image.data_base64}`}
+                                        alt={`Face ${i + 1}`}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-muted-foreground">No image</div>
+                                    )}
+                                  </div>
+                                  <div className="p-2 text-xs space-y-1">
+                                    <code className="text-muted-foreground font-mono block truncate">{face?.face_id ?? ''}</code>
+                                    <div className="flex items-center gap-1 text-muted-foreground">
+                                      <Clock className="h-3 w-3" />
+                                      {formatTimestamp(face?.time?.timestamp_sec ?? 0)}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    {/* Models Tab */}
+                    <TabsContent value="models" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Models Used</CardTitle>
+                          <CardDescription>AI models and configurations for this processing job</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="border rounded-md p-3 space-y-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Mic className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">Transcription</span>
+                              </div>
+                              <p className="text-sm">{result.models?.transcription?.name ?? 'N/A'}</p>
+                              <p className="text-xs text-muted-foreground">{result.models?.transcription?.provider ?? 'N/A'} • {result.models?.transcription?.language ?? 'N/A'}</p>
                             </div>
 
-                            <div className="border rounded-lg p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <MessageSquare className="h-4 w-4 text-blue-600" />
-                                <span className="font-medium">Segment Summarisation</span>
+                            <div className="border rounded-md p-3 space-y-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">Summarisation</span>
                               </div>
-                              <p className="text-sm text-gray-600">{result.models?.segment_summarisation?.name ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Provider: {result.models?.segment_summarisation?.provider ?? 'N/A'}</p>
+                              <p className="text-sm">{result.models?.segment_summarisation?.name ?? 'N/A'}</p>
+                              <p className="text-xs text-muted-foreground">{result.models?.segment_summarisation?.provider ?? 'N/A'}</p>
                             </div>
 
-                            <div className="border rounded-lg p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Layers className="h-4 w-4 text-green-600" />
-                                <span className="font-medium">Topic Extraction</span>
+                            <div className="border rounded-md p-3 space-y-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Layers className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">Topic Extraction</span>
                               </div>
-                              <p className="text-sm text-gray-600">{result.models?.topic_extraction?.name ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Provider: {result.models?.topic_extraction?.provider ?? 'N/A'}</p>
+                              <p className="text-sm">{result.models?.topic_extraction?.name ?? 'N/A'}</p>
+                              <p className="text-xs text-muted-foreground">{result.models?.topic_extraction?.provider ?? 'N/A'}</p>
                             </div>
 
-                            <div className="border rounded-lg p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Hash className="h-4 w-4 text-indigo-600" />
-                                <span className="font-medium">Text Embedding</span>
+                            <div className="border rounded-md p-3 space-y-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Eye className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">Captioning</span>
                               </div>
-                              <p className="text-sm text-gray-600">{result.models?.text_embedding?.name ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Provider: {result.models?.text_embedding?.provider ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Dimension: {result.models?.text_embedding?.dimension ?? 'N/A'}</p>
+                              <p className="text-sm">{result.models?.captioning?.name ?? 'N/A'}</p>
+                              <p className="text-xs text-muted-foreground">{result.models?.captioning?.provider ?? 'N/A'}</p>
                             </div>
 
-                            <div className="border rounded-lg p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <ImageIcon className="h-4 w-4 text-orange-600" />
-                                <span className="font-medium">Image Embedding</span>
+                            <div className="border rounded-md p-3 space-y-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Hash className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">Text Embedding</span>
                               </div>
-                              <p className="text-sm text-gray-600">{result.models?.image_embedding?.name ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Provider: {result.models?.image_embedding?.provider ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Dimension: {result.models?.image_embedding?.dimension ?? 'N/A'}</p>
+                              <p className="text-sm">{result.models?.text_embedding?.name ?? 'N/A'}</p>
+                              <p className="text-xs text-muted-foreground">{result.models?.text_embedding?.provider ?? 'N/A'} • {result.models?.text_embedding?.dimension ?? 'N/A'}d</p>
                             </div>
 
-                            <div className="border rounded-lg p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Eye className="h-4 w-4 text-cyan-600" />
-                                <span className="font-medium">Captioning</span>
+                            <div className="border rounded-md p-3 space-y-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">Image Embedding</span>
                               </div>
-                              <p className="text-sm text-gray-600">{result.models?.captioning?.name ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Provider: {result.models?.captioning?.provider ?? 'N/A'}</p>
+                              <p className="text-sm">{result.models?.image_embedding?.name ?? 'N/A'}</p>
+                              <p className="text-xs text-muted-foreground">{result.models?.image_embedding?.provider ?? 'N/A'} • {result.models?.image_embedding?.dimension ?? 'N/A'}d</p>
                             </div>
 
-                            <div className="border rounded-lg p-4 md:col-span-2">
-                              <div className="flex items-center gap-2 mb-2">
-                                <User className="h-4 w-4 text-pink-600" />
-                                <span className="font-medium">Face Detection</span>
+                            <div className="border rounded-md p-3 space-y-1 md:col-span-2">
+                              <div className="flex items-center gap-2 mb-1">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">Face Detection</span>
                               </div>
-                              <p className="text-sm text-gray-600">{result.models?.face_detection?.name ?? 'N/A'}</p>
-                              <p className="text-xs text-gray-400">Provider: {result.models?.face_detection?.provider ?? 'N/A'}</p>
+                              <p className="text-sm">{result.models?.face_detection?.name ?? 'N/A'}</p>
+                              <p className="text-xs text-muted-foreground">{result.models?.face_detection?.provider ?? 'N/A'}</p>
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
 
-                  {/* Costs Tab */}
-                  <TabsContent value="costs" className="mt-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Cost Breakdown</CardTitle>
-                        <CardDescription>Estimated API costs for this processing job</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {result.stats.usage && result.stats.usage.models && result.stats.usage.models.length > 0 ? (
-                          <div className="space-y-4">
-                            <div className="border rounded-lg p-4 bg-green-50 border-green-200">
-                              <div className="flex items-center justify-between">
-                                <span className="text-lg font-medium text-green-800">Total Estimated Cost</span>
-                                <span className="text-2xl font-bold text-green-700">
-                                  {formatCost(result.stats.usage.total_estimated_cost_usd ?? 0)}
-                                </span>
+                    {/* Costs Tab */}
+                    <TabsContent value="costs" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Cost Breakdown</CardTitle>
+                          <CardDescription>Estimated API costs and token usage</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {result.stats.usage && result.stats.usage.models && result.stats.usage.models.length > 0 ? (
+                            <div className="space-y-4">
+                              <div className="border rounded-md p-4 bg-emerald-50 border-emerald-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-emerald-900">Total Estimated Cost</span>
+                                  <span className="text-2xl font-bold text-emerald-700">
+                                    {formatCost(result.stats.usage.total_estimated_cost_usd ?? 0)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between mt-2 text-sm text-emerald-700">
+                                  <span>Total Tokens</span>
+                                  <span className="font-mono font-semibold">{(result.stats.usage.total_tokens ?? 0).toLocaleString()}</span>
+                                </div>
                               </div>
-                              <div className="flex items-center justify-between mt-2 text-sm text-green-600">
-                                <span>Total Tokens</span>
-                                <span className="font-mono">{(result.stats.usage.total_tokens ?? 0).toLocaleString()}</span>
-                              </div>
-                            </div>
 
-                            <div className="space-y-2">
-                              <h4 className="font-medium text-gray-700">By Model</h4>
-                              <div className="border rounded-lg overflow-hidden">
-                                <table className="w-full text-sm">
-                                  <thead className="bg-gray-50">
-                                    <tr>
-                                      <th className="text-left p-3 font-medium text-gray-600">Model</th>
-                                      <th className="text-right p-3 font-medium text-gray-600">Input Tokens</th>
-                                      <th className="text-right p-3 font-medium text-gray-600">Output Tokens</th>
-                                      <th className="text-right p-3 font-medium text-gray-600">Total Tokens</th>
-                                      <th className="text-right p-3 font-medium text-gray-600">Estimated Cost</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {result.stats.usage.models.map((usage, index) => (
-                                      <tr key={usage.model || index} className="border-t">
-                                        <td className="p-3 font-mono text-xs">{usage.model ?? 'Unknown'}</td>
-                                        <td className="p-3 text-right text-gray-600">{(usage.input_tokens ?? 0).toLocaleString()}</td>
-                                        <td className="p-3 text-right text-gray-600">{(usage.output_tokens ?? 0).toLocaleString()}</td>
-                                        <td className="p-3 text-right text-gray-600">{(usage.total_tokens ?? 0).toLocaleString()}</td>
-                                        <td className="p-3 text-right font-medium">{formatCost(usage.estimated_cost_usd ?? 0)}</td>
+                              <div>
+                                <h4 className="text-sm font-semibold mb-3">Per Model Usage</h4>
+                                <div className="border rounded-md overflow-hidden">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-muted">
+                                      <tr className="text-xs">
+                                        <th className="text-left p-2 font-medium">Model</th>
+                                        <th className="text-right p-2 font-medium">Input</th>
+                                        <th className="text-right p-2 font-medium">Output</th>
+                                        <th className="text-right p-2 font-medium">Total</th>
+                                        <th className="text-right p-2 font-medium">Cost</th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                    </thead>
+                                    <tbody>
+                                      {result.stats.usage.models.map((usage, index) => (
+                                        <tr key={usage.model || index} className="border-t hover:bg-muted/50 transition-colors">
+                                          <td className="p-2 font-mono text-xs">{usage.model ?? 'Unknown'}</td>
+                                          <td className="p-2 text-right text-xs text-muted-foreground">{(usage.input_tokens ?? 0).toLocaleString()}</td>
+                                          <td className="p-2 text-right text-xs text-muted-foreground">{(usage.output_tokens ?? 0).toLocaleString()}</td>
+                                          <td className="p-2 text-right text-xs font-medium">{(usage.total_tokens ?? 0).toLocaleString()}</td>
+                                          <td className="p-2 text-right text-xs font-semibold">{formatCost(usage.estimated_cost_usd ?? 0)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 text-gray-500">
-                            <DollarSign className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                            <p>Cost information not available</p>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
-              </div>
-            ) : (
-              <Card className="h-full min-h-[400px] flex items-center justify-center">
-                <div className="text-center text-gray-400 p-8">
-                  <FileVideo className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-                  <p className="text-lg font-medium text-gray-500">No Results Yet</p>
-                  <p className="text-sm mt-1">Upload a video to start processing</p>
+                          ) : (
+                            <div className="text-center py-12 text-muted-foreground">
+                              <DollarSign className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
+                              <p>Cost information not available</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+                  </Tabs>
                 </div>
-              </Card>
-            )}
+              ) : (
+                <Card className="h-full min-h-[500px] flex items-center justify-center">
+                  <div className="text-center p-8">
+                    <FileVideo className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
+                    <p className="text-lg font-medium">No Results Yet</p>
+                    <p className="text-sm text-muted-foreground mt-2">Upload a video or import JSON to view results</p>
+                  </div>
+                </Card>
+              )}
+            </div>
           </div>
         </div>
-      </main>
 
-      {/* Footer */}
-      {/* <footer className="border-t border-gray-200 bg-white mt-8">
-        <div className="container mx-auto max-w-7xl px-4 py-4 text-center text-sm text-gray-500">
-          RCSQ Tool v1.0.0 • Video Preprocessing for Research Applications
-        </div>
-      </footer> */}
+        {/* Footer */}
+        <footer className="border-t mt-12 py-6 px-4 sm:px-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+            <p>© {new Date().getFullYear()} RCSQ Tool • Video Preprocessing for Research</p>
+            <Link href="/" className="hover:text-foreground transition-colors">
+              Back to Documentation
+            </Link>
+          </div>
+        </footer>
+      </main>
     </div>
   );
 }

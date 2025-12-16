@@ -196,9 +196,9 @@ export default function HomePage() {
           {activeSection === 'overview' && (
           <section id="overview">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold tracking-tight">AI-Powered Video Processing</h2>
+              <h2 className="text-2xl font-bold tracking-tight">Efficiently Retrieve Contexually Relevant Video Clips</h2>
               <p className="text-muted-foreground mt-1">
-                Extract transcripts, topics, frames, and faces from videos with state-of-the-art AI
+                Extract video topics with segments analysing transcription, face, object and frames through RAG pipeline.  
               </p>
             </div>
 
@@ -1266,52 +1266,268 @@ export default function HomePage() {
 
           {/* Use Cases */}
           {activeSection === 'use-cases' && (
-          <section id="use-cases">
-            <h2 className="text-2xl font-bold tracking-tight mb-4">Use Cases</h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Video Search</CardTitle>
-                  <CardDescription>Build semantic search over video libraries</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  Use transcript embeddings to find relevant moments, extract clips based on segment timestamps.
-                </CardContent>
-              </Card>
+          <section id="use-cases" className="max-w-4xl mx-auto">
+            <div className="space-y-8">
+              {/* Header */}
+              <div className="space-y-4">
+                <h2 className="text-3xl font-bold tracking-tight">Real-World Applications</h2>
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  RCSQ Tool transforms how you work with video content by making it searchable, 
+                  analyzable, and actionable. Here's how teams across different industries are 
+                  leveraging the power of multimodal video analysis.
+                </p>
+              </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Surveillance Analysis</CardTitle>
-                  <CardDescription>Process security footage automatically</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  Detect and track faces, generate scene descriptions, create searchable archives of events.
-                </CardContent>
-              </Card>
+              {/* Use Case 1: Video Search */}
+              <div className="space-y-4 pt-8">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-500/10">
+                    <Video className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-2xl font-semibold">Semantic Video Search</h3>
+                </div>
+                
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  Transform massive video libraries into searchable knowledge bases. Whether you're managing 
+                  educational content, company training materials, or media archives, RCSQ Tool enables 
+                  instant discovery of relevant moments across hours of footage.
+                </p>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Content Generation</CardTitle>
-                  <CardDescription>Automatically generate video metadata</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  Create summaries, chapter markers, and descriptions for accessibility or CMS.
-                </CardContent>
-              </Card>
+                <Card className="border-l-4 border-l-blue-500">
+                  <CardContent className="pt-6">
+                    <p className="text-sm font-medium mb-3">Key Benefits:</p>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-blue-500 shrink-0" />
+                        <span>Search by natural language queries across transcript embeddings</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-blue-500 shrink-0" />
+                        <span>Visual similarity search using frame and face embeddings</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-blue-500 shrink-0" />
+                        <span>Extract precise clips with segment timestamps (start/end times)</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-blue-500 shrink-0" />
+                        <span>Topic-based navigation for structured content exploration</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Virality Detection</CardTitle>
-                  <CardDescription>Identify high-engagement moments</CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  Analyze frame-by-frame to predict viral potential, combine with sentiment analysis.
-                </CardContent>
-              </Card>
+                <div className="rounded-lg bg-muted p-4 text-sm">
+                  <p className="font-medium mb-2">💡 Example Use Case</p>
+                  <p className="text-muted-foreground">
+                    A company with 1,000+ hours of training videos uses RCSQ to let employees search 
+                    "How do I configure the dashboard?" and instantly jump to relevant segments across 
+                    multiple videos, saving hours of manual searching.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t" />
+
+              {/* Use Case 2: Surveillance Analysis */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-purple-500/10">
+                    <Shield className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <h3 className="text-2xl font-semibold">Surveillance & Security Analysis</h3>
+                </div>
+                
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  Process hours of security footage automatically with AI-powered face detection and 
+                  scene understanding. Create searchable archives that let security teams find specific 
+                  individuals or events in seconds instead of hours.
+                </p>
+
+                <Card className="border-l-4 border-l-purple-500">
+                  <CardContent className="pt-6">
+                    <p className="text-sm font-medium mb-3">Key Benefits:</p>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-purple-500 shrink-0" />
+                        <span>AWS Rekognition-powered face detection with confidence scores</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-purple-500 shrink-0" />
+                        <span>Face embeddings for identity matching across multiple cameras</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-purple-500 shrink-0" />
+                        <span>Scene descriptions via GPT-5-mini vision for contextual understanding</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-purple-500 shrink-0" />
+                        <span>Temporal tracking with precise timestamps and bounding boxes</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <div className="rounded-lg bg-muted p-4 text-sm">
+                  <p className="font-medium mb-2">💡 Example Use Case</p>
+                  <p className="text-muted-foreground">
+                    A retail chain processes daily security footage to automatically detect and track 
+                    individuals of interest, creating alerts when the same face appears across multiple 
+                    store locations, with full audit trails and evidence clips.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t" />
+
+              {/* Use Case 3: Content Generation */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-green-500/10">
+                    <Code2 className="w-6 h-6 text-green-600 dark:text-green-400" />
+                  </div>
+                  <h3 className="text-2xl font-semibold">Automated Content Generation</h3>
+                </div>
+                
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  Generate rich metadata, summaries, and descriptions automatically for every video. 
+                  Perfect for content management systems, accessibility compliance, and SEO optimization. 
+                  Let AI handle the tedious work while you focus on creative decisions.
+                </p>
+
+                <Card className="border-l-4 border-l-green-500">
+                  <CardContent className="pt-6">
+                    <p className="text-sm font-medium mb-3">Key Benefits:</p>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-500 shrink-0" />
+                        <span>Auto-generated summaries for each segment using GPT-4o-mini</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-500 shrink-0" />
+                        <span>Topic extraction for automatic chapter markers and navigation</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-500 shrink-0" />
+                        <span>Frame captions for visual descriptions and accessibility</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-500 shrink-0" />
+                        <span>Whisper transcriptions with word-level timestamps for captions</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <div className="rounded-lg bg-muted p-4 text-sm">
+                  <p className="font-medium mb-2">💡 Example Use Case</p>
+                  <p className="text-muted-foreground">
+                    A YouTube creator uploads a 30-minute tutorial. RCSQ automatically generates: 
+                    chapter markers with timestamps, a full description with key topics covered, 
+                    SEO-optimized tags, and accessibility-compliant captions—all in under 2 minutes.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t" />
+
+              {/* Use Case 4: Virality Detection */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-orange-500/10">
+                    <Zap className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <h3 className="text-2xl font-semibold">Engagement & Virality Analysis</h3>
+                </div>
+                
+                <p className="text-base text-muted-foreground leading-relaxed">
+                  Identify high-engagement moments in your content by analyzing visual and audio 
+                  patterns that correlate with viewer retention. Combine frame analysis with 
+                  sentiment detection to predict which clips have viral potential.
+                </p>
+
+                <Card className="border-l-4 border-l-orange-500">
+                  <CardContent className="pt-6">
+                    <p className="text-sm font-medium mb-3">Key Benefits:</p>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-orange-500 shrink-0" />
+                        <span>Frame-by-frame visual analysis to detect dynamic moments</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-orange-500 shrink-0" />
+                        <span>Topic clustering to identify trending themes and subjects</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-orange-500 shrink-0" />
+                        <span>Face detection to track emotional expressions and reactions</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-orange-500 shrink-0" />
+                        <span>Segment embeddings for content similarity and recommendation engines</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <div className="rounded-lg bg-muted p-4 text-sm">
+                  <p className="font-medium mb-2">💡 Example Use Case</p>
+                  <p className="text-muted-foreground">
+                    A social media agency analyzes thousands of TikTok videos to identify patterns 
+                    in viral content: peak moments are extracted at 3-7 second marks with high 
+                    visual contrast and emotional faces, helping creators optimize their content strategy.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t" />
+
+              {/* Additional Applications */}
+              <div className="space-y-4 pt-4">
+                <h3 className="text-xl font-semibold">Other Applications</h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-primary" />
+                      <p className="font-medium text-sm">Quality Assurance</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Detect production errors, inconsistencies, or quality issues in manufacturing videos
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Book className="w-4 h-4 text-primary" />
+                      <p className="font-medium text-sm">E-Learning</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Create interactive transcripts, quizzes from topics, and personalized learning paths
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-primary" />
+                      <p className="font-medium text-sm">Broadcasting</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Auto-generate highlights, create clip compilations, and enable real-time search
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Server className="w-4 h-4 text-primary" />
+                      <p className="font-medium text-sm">Video RAG Systems</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Build retrieval-augmented generation systems with video context for AI chatbots
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Section Navigation */}
-            <div className="flex items-center justify-between pt-6 border-t mt-8">
+            <div className="flex items-center justify-between pt-8 border-t mt-12">
               <Button
                 variant="outline"
                 onClick={() => navigateToSection('api-reference')}
